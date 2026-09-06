@@ -89,15 +89,17 @@ with public checkpoints; nothing to license.
 
 ## Scope — build Round 1, describe Round 2
 
-Report §11. Do not build a Round 2 item, and do not present one as working.
+Report §11, amended by the Exotel/WebRTC decision — that decision moves call acquisition
+into Round 1, where the report had put virtual-number routing in Round 2. Do not build a
+Round 2 item, and do not present one as working.
 
 | Round 1 — must exist and must demo | Round 2 — described, not built |
 |---|---|
-| Calling app, two parties connected, audio copied to our server | Virtual-number routing for ordinary calls (V2) |
-| Detection model on that stream, score updating live | Family Vault enrolment and consent flow |
-| Risk display with a clear warning state | Transcript-based scam-script detection |
-| Training pipeline with phone-compression and noise built in | Payment-blocking integration with a bank |
-| Evaluation on unseen data, incl. Indian-accented genuine speech | On-device inference |
+| Exotel acquisition (primary) **and** the WebRTC fallback | Family Vault enrolment and consent flow |
+| Detection model on that stream, score updating live | Transcript-based scam-script detection |
+| Risk display and over-the-top warning overlay | Payment-blocking integration with a bank |
+| Training pipeline with phone-compression and noise built in | On-device inference |
+| Evaluation on unseen data, incl. Indian-accented genuine speech | |
 | Alert-fingerprinting and the sealed record | |
 
 Saying "this part is built, this part is designed, this part is research" reads as
@@ -124,6 +126,9 @@ competent. Implying everything works reads as untested.
   watermark teaches the model to look for the watermark instead of for synthesis.
 - **No voice data on a ledger.** Only tamper-evidence anchors. Putting voice on-chain
   would breach DPDP data minimisation — that sentence is the blockchain answer.
+- **The acquisition layer is swappable; the backend is not.** Exotel (primary) and WebRTC
+  (fallback) are two ways to deliver audio to one unchanged pipeline. Nothing below
+  ingestion knows which one is in use. See Audio acquisition.
 
 ---
 
@@ -135,7 +140,7 @@ call source → audio ingestion → live pipeline → four AI checks → risk fu
 
 | Stage | Contents |
 |---|---|
-| 01 Call source | Incoming phone call, custom calling app, or a forwarded ordinary call |
+| 01 Call source | **Exotel** (primary) or **WebRTC** (fallback) — see Audio acquisition |
 | 02 Audio ingestion | Audio unpacking, codec handling (Opus / G.711 / AMR), **20 ms** frames |
 | 03 Live pipeline | WebSocket → short audio buffer (Redis Streams) → silence filtering → live processing |
 | 04 Four AI checks | Run in parallel on a copy — see table below |
@@ -186,14 +191,55 @@ Bridging through a virtual number adds a further **~100–330 ms** over a direct
 
 ---
 
-## Getting the audio — V1 and V2
+## Audio acquisition — Exotel primary, WebRTC fallback
 
-- **V1 (demo):** both parties on our own app; a media relay copies the audio to our
-  models. End-to-end controllable, and useless in reality — a scammer will never install
-  our app.
-- **V2 (the deployable answer):** the protected user forwards their own number to a
-  virtual number we control. It answers, dials them back, bridges the two legs, and we
-  hear the call. The attacker dialled a number that happened to forward.
+**Team decision, recorded 2026-09-06. Exotel is named in neither the deck nor the report
+— this section is the authority for it, and it is not a contradiction to be "fixed"
+against those documents.** It supersedes the report's framing of virtual-number routing
+as a Round 2 item.
+
+Both paths are **acquisition layers only**. They differ in how call audio reaches us and
+in nothing else.
+
+```
+Primary:   Exotel → audio stream ┐
+                                 ├→ SatyaCheck backend → AI models → risk engine → app / overlay
+Fallback:  WebRTC → audio stream ┘
+```
+
+- **Primary — Exotel.** Exotel is the telephony infrastructure. The protected user's
+  incoming calls arrive through it; Exotel streams the call audio to our backend while
+  the call itself continues normally through Exotel. The caller installs nothing and
+  their cooperation is never required.
+- **Fallback — WebRTC.** If the Exotel integration fails, or its call/audio streaming
+  turns out to be limited in ways we cannot work around, we establish the audio channel
+  over WebRTC instead and run the identical backend. This exists so the complete system
+  can still be demonstrated end to end with the telephony integration down.
+
+### The invariant
+
+**The backend, the four AI checks, the risk engine and the app contract do not change
+between paths.** Exotel and WebRTC terminate at the same audio-stream interface.
+
+Consequences, and these are enforceable in review:
+
+- No model, scoring, fusion or reason-code module may import an Exotel or WebRTC symbol,
+  branch on which transport delivered the audio, or read a transport-specific field.
+- Transport-specific handling stops at ingestion (stage 02). Past that boundary everything
+  sees the same decoded frames.
+- A change that makes one path behave differently from the other is a bug unless the
+  difference is a documented codec or sample-rate property of the transport itself.
+- Adding a third acquisition layer later must require no change below stage 02. If it
+  would, the boundary has already leaked.
+
+### Delivery back to the user
+
+The risk result — genuine or synthetic, and the risk level — goes from the risk engine to
+the SatyaCheck app, which draws the warning **over whatever application is in the
+foreground**, so the user sees it during the call without switching apps. Same on both
+paths.
+
+### Business shape
 
 The per-minute forwarding leg is the **cost driver**, modelled per user. Buyers: banks
 under RBI fraud duties, contact centres, helplines. Pilot-ready on a single bank inbound
@@ -205,9 +251,13 @@ line in 6–9 months.
 
 The report flags these as unverified. Treat each as blocking for any claim built on it.
 
-- **Can the telephony provider stream audio *during* the call**, not just hand us a
-  recording afterwards? Unconfirmed in current provider documentation. If recordings
-  only, we degrade to chunked near-real-time and must say so.
+- **Can Exotel stream call audio *during* the call**, not just hand us a recording
+  afterwards? Unconfirmed against current Exotel documentation — nobody has checked. This
+  is the single question the primary path rests on. Two outcomes: if it streams, the
+  primary path stands; if it is recordings only, that path degrades to chunked
+  near-real-time analysis and we say so in those words rather than claiming "real time".
+  The WebRTC fallback exists because this is unresolved — it is the mitigation, not a
+  second product.
 - **TRAI and DoT positions** on live voice analysis — specific clauses unread. Do not
   assert compliance.
 - **Bridge cost and delay** are real line items, not rounding errors.
@@ -306,7 +356,7 @@ Volunteering a weakness with a number attached is the strongest move available.
   audio, no transcript, no voice data on the ledger. Handed to NCRP / 1930 on request.
 - Voiceprints are personal data under DPDP Act 2023 (Rules notified Nov 2025). Consent
   must be explicit, revocable, and deletion must actually delete.
-- The legal basis for V2 routing is one-party consent — our user is a genuine call
+- The legal basis for Exotel routing is one-party consent — our user is a genuine call
   participant. Do not add any feature that **modifies** the call (injected audio, synthetic
   speech into the stream). Observing is defensible; altering is not, and is out of scope.
 

@@ -53,7 +53,7 @@ call source → audio ingestion → live pipeline → four AI checks → risk fu
 
 | Stage | Contents | Budget |
 |---|---|---|
-| 01 Call source | Phone call, our calling app, or a forwarded ordinary call | — |
+| 01 Call source | **Exotel** (primary) or **WebRTC** (fallback) — see Audio acquisition | — |
 | 02 Audio ingestion | Unpacking, codec handling (Opus / G.711 / AMR), 20 ms frames | — |
 | 03 Live pipeline | WebSocket → short buffer (Redis Streams) → silence filtering | < 20 ms |
 | 04 Four AI checks | In parallel, on a copy | < 180 ms |
@@ -65,6 +65,40 @@ call source → audio ingestion → live pipeline → four AI checks → risk fu
 
 ---
 
+## Audio acquisition
+
+Two paths deliver call audio. They differ in nothing else.
+
+```
+Primary:   Exotel → audio stream ┐
+                                 ├→ SatyaCheck backend → AI models → risk engine → app / overlay
+Fallback:  WebRTC → audio stream ┘
+```
+
+**Primary — Exotel.** Exotel is the telephony infrastructure. Incoming calls to the
+protected user arrive through it, Exotel streams the call audio to our backend, and the
+call itself continues normally through Exotel throughout. The caller installs nothing.
+
+**Fallback — WebRTC.** If the Exotel integration fails, or its call/audio streaming
+proves too limited, we establish the audio channel over WebRTC and run the identical
+backend. This exists so the complete system can still be demonstrated with the telephony
+integration down.
+
+The risk result — genuine or synthetic, plus the risk level — goes to the SatyaCheck app,
+which draws the warning **over whatever app is in the foreground**, so the user sees it
+mid-call without switching apps. Identical on both paths.
+
+**The invariant:** Exotel and WebRTC are acquisition layers only. The backend, the four
+AI checks, the risk engine and the app contract are the same on both. Transport-specific
+handling stops at ingestion (stage 02); nothing below it may branch on which transport
+delivered the audio. Adding a third acquisition layer later should require no change
+below stage 02.
+
+> Exotel is a team decision (2026-09-06) and is named in neither the deck nor the report.
+> This section and the matching one in `AGENTS.md` are the authority for it.
+
+---
+
 ## Scope
 
 Round 1 must exist and must demo. Round 2 is described, not built — do not present a
@@ -72,11 +106,11 @@ Round 2 item as working.
 
 | Round 1 — built | Round 2 — designed |
 |---|---|
-| Calling app, two parties, audio copied to our server | Virtual-number routing for ordinary calls |
-| Detection model on the stream, score updating live | Family Vault enrolment and consent flow |
-| Risk display with a clear warning state | Transcript-based scam-script detection |
-| Training pipeline with compression and noise built in | Payment-blocking integration with a bank |
-| Evaluation on unseen data, incl. Indian-accented speech | On-device inference |
+| Exotel acquisition (primary) and the WebRTC fallback | Family Vault enrolment and consent flow |
+| Detection model on the stream, score updating live | Transcript-based scam-script detection |
+| Risk display and over-the-top warning overlay | Payment-blocking integration with a bank |
+| Training pipeline with compression and noise built in | On-device inference |
+| Evaluation on unseen data, incl. Indian-accented speech | |
 | Alert-fingerprinting and the sealed record | |
 
 ---
@@ -94,15 +128,18 @@ Honest state of the repo. Do not read anything here as more finished than it say
 | `embed.py`, `asr.py` | **Shells** — adapter stubs, unwired |
 | Retrieval evaluation | **Not written** — `eval_retrieval.py` missing, `corpus/heldout/` empty |
 | Call-screen overlay (React Native, Android) | **Working** — three states, auto-speakerphone, raw mic capture |
-| Telephony routing (V2) | **Not built** — designed, not implemented |
+| Exotel acquisition (primary path) | **Not built** — mid-call audio streaming unverified against Exotel's documentation |
+| WebRTC acquisition (fallback path) | **Not built** — designed as the Exotel fallback |
 | Family Vault | **Not built** — planned for Round 2 |
 
 **Calibration caveat:** current calibration was fitted against a placeholder lexical
 encoder, not BGE-m3. Confidence figures derived from it are provisional.
 
-**Unconfirmed and blocking:** whether our telephony provider can stream call audio
-*during* the call rather than handing over a recording afterwards. If it is recordings
-only, V2 degrades to chunked near-real-time analysis and we say so in those words. TRAI
+**Unconfirmed and blocking:** whether **Exotel** can stream call audio *during* the call
+rather than handing over a recording afterwards. Nobody has checked this against Exotel's
+documentation, and the whole primary path rests on it. If it is recordings only, that
+path degrades to chunked near-real-time analysis and we say so in those words rather than
+claiming "real time" — the WebRTC fallback exists precisely because this is open. TRAI
 and DoT clauses on live voice analysis are also unread.
 
 ---
@@ -245,8 +282,9 @@ Agents may update this README. Rules:
 
 1. **The deck and the report win.** If this file contradicts either, this file is wrong —
    fix it. If a change would contradict them, stop and say so; a human corrects those.
+   The one exception is the Exotel/WebRTC decision, which postdates both documents.
 2. **Only edit the Status table, Setup, Running tests, and Documents sections.** Findings,
-   Scope, Privacy and Pipeline change only when a human says so.
+   Scope, Privacy, Pipeline and Audio acquisition change only when a human says so.
 3. **A status only moves to "Working" when a test proves it.** Name the test in the
    commit message. "It ran on my machine" is not a status change.
 4. **Never add a number this repo did not produce.** Figures under Findings carry a

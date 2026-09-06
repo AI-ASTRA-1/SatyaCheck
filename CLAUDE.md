@@ -11,6 +11,10 @@ and claims. If code, `README.md`, or `AGENTS.md` contradicts them, the file is w
 fix the file. If a *change you are asked to make* would contradict them, stop and say so;
 those two documents are corrected by a human, not by an agent.
 
+**One exception, and it is deliberate:** the Exotel/WebRTC acquisition decision
+(2026-09-06) postdates both documents and appears in neither. The "Audio acquisition"
+section of AGENTS.md is the authority for it. Do not "correct" it against the deck.
+
 ## Skills
 
 This repo uses three custom skills. Reach for them by name:
@@ -28,9 +32,15 @@ This repo uses three custom skills. Reach for them by name:
   the module smoke test actually run and its result reported, and any doc the change
   contradicts (`README.md`, module docstring/README, `AGENTS.md`) updated in the same
   turn. Code with no test run and no doc touched is an unfinished turn, not a handoff.
-- **Round 1 only.** Virtual-number routing, Family Vault, transcript scam-script
-  detection, payment blocking and on-device inference are Round 2 — described, not built.
-  Asked to build one, say it is out of scope for this round before starting.
+- **Never couple the pipeline to the transport.** Exotel and WebRTC are interchangeable
+  acquisition layers feeding one unchanged backend. If a diff makes a model, scoring,
+  fusion or reason-code module import a transport symbol, branch on which transport
+  delivered the audio, or read a transport-specific field, that is the bug — say so
+  rather than writing it. Transport handling stops at ingestion.
+- **Round 1 only.** Family Vault, transcript scam-script detection, payment blocking and
+  on-device inference are Round 2 — described, not built. Asked to build one, say it is
+  out of scope for this round before starting. Call acquisition (Exotel primary, WebRTC
+  fallback) is Round 1.
 - **Plan before multi-file edits.** One paragraph, then wait. Do not start editing across
   three files and narrate as you go.
 - **One task per turn.** If the request contains two, do the first and name the second.
