@@ -1,30 +1,83 @@
 # SATYACHECK
 
+**Real Voice. Real Person. Real-Time Protection.**
+
 Real-time detection of AI-cloned voices during live calls.
 
-Smart India Hackathon 2026 · Problem Statement 26104 · Team AI ASTRA
-AICTE Cyber Security Cell · Theme: Blockchain & Cybersecurity
+Smart India Hackathon 2026 · Problem Statement **SIH26104** · Team **AI ASTRA**
+Theme: Blockchain & Cybersecurity · PS Category: Software
+
+> A controlled live-warning prototype now. Real-world deployment after validation.
 
 ---
 
 ## What it does
 
-Listens to a live call and answers one question every second: **how likely is it that
-this voice is machine-generated?** If the answer crosses a threshold, the person on the
-call is warned — before a transfer is approved or an OTP is read aloud.
+Listens to a live call and answers one question, updated continuously throughout the
+call rather than once at the start: **how likely is it that this voice is
+machine-generated?** If the answer crosses a threshold, the person on the call is
+warned — before a transfer is approved or an OTP is read aloud.
+
+It **raises a warning**; the human decides. We do not claim to detect deepfakes, and we
+do not claim the problem is solved — see Findings.
 
 Four checks run in parallel on a **copy** of the audio. Each returns evidence, not a
-verdict. A separate risk engine fuses them into one calibrated score.
+verdict. A separate risk engine fuses them with call context (number, location, time,
+history) into a single **0–100** score; what that score triggers is a policy rule set per
+customer, because a bank is not a family.
 
-| Check | What it answers | Module |
-|---|---|---|
-| Machine fingerprints | Is the waveform synthetic? | `audio_ml/` |
-| Speaker identity | Is this who they claim to be? | `audio_ml/` |
-| Rhythm & pitch | Is the prosody anomalous? | `audio_ml/` |
-| What is being said | Is this a scam script? | `nlp_rag/` |
+| Check | What it answers | Model | Module |
+|---|---|---|---|
+| Machine fingerprints | Is the waveform synthetic? | XLS-R + AASIST | `audio_ml/` |
+| Speaker identity | Is this who they claim to be? | ECAPA-TDNN | `audio_ml/` |
+| Rhythm & pitch | Is the prosody anomalous? | openSMILE | `audio_ml/` |
+| What is being said | Is this a scam script? | speech-to-text → LM | `nlp_rag/` |
+
+XLS-R carries the multilingual front end — Hindi, English, Tamil, Marathi, Bengali and
+more. AASIST-L (~85K params) runs on CPU. All inference is local; there is no external
+API to fail on demo day.
 
 Detection runs **out-of-band**. If the models fail mid-call, the call continues
 unprotected — it can never be dropped or altered.
+
+**Latency budget:** spoken word to warning on screen in under **400 ms**, nine times out
+of ten. Bridging through a virtual number (V2) adds a further ~100–330 ms.
+
+---
+
+## Pipeline
+
+```
+call source → audio ingestion → live pipeline → four AI checks → risk fusion → response → evidence
+```
+
+| Stage | Contents | Budget |
+|---|---|---|
+| 01 Call source | Phone call, our calling app, or a forwarded ordinary call | — |
+| 02 Audio ingestion | Unpacking, codec handling (Opus / G.711 / AMR), 20 ms frames | — |
+| 03 Live pipeline | WebSocket → short buffer (Redis Streams) → silence filtering | < 20 ms |
+| 04 Four AI checks | In parallel, on a copy | < 180 ms |
+| 05 Risk fusion | AI signals + call context → 0–100 | < 30 ms |
+| 06 Response | Warning → verify / escalate → transaction protection | < 50 ms |
+| 07 Evidence | Incident fingerprint → tamper-evident record | — |
+
+**Stack:** WebRTC · Python · PyTorch · WebSocket · FastAPI · React Native
+
+---
+
+## Scope
+
+Round 1 must exist and must demo. Round 2 is described, not built — do not present a
+Round 2 item as working.
+
+| Round 1 — built | Round 2 — designed |
+|---|---|
+| Calling app, two parties, audio copied to our server | Virtual-number routing for ordinary calls |
+| Detection model on the stream, score updating live | Family Vault enrolment and consent flow |
+| Risk display with a clear warning state | Transcript-based scam-script detection |
+| Training pipeline with compression and noise built in | Payment-blocking integration with a bank |
+| Evaluation on unseen data, incl. Indian-accented speech | On-device inference |
+| Alert-fingerprinting and the sealed record | |
 
 ---
 
@@ -40,12 +93,17 @@ Honest state of the repo. Do not read anything here as more finished than it say
 | Anti-spoof detection | **Not working** — no checkpoint on Python 3.14; returns neutral `0.5` / `"uncertain"` |
 | `embed.py`, `asr.py` | **Shells** — adapter stubs, unwired |
 | Retrieval evaluation | **Not written** — `eval_retrieval.py` missing, `corpus/heldout/` empty |
-| Android call-screen overlay | **Working** — three states, auto-speakerphone, raw mic capture |
+| Call-screen overlay (React Native, Android) | **Working** — three states, auto-speakerphone, raw mic capture |
 | Telephony routing (V2) | **Not built** — designed, not implemented |
-| Family Vault | **Not built** — planned |
+| Family Vault | **Not built** — planned for Round 2 |
 
 **Calibration caveat:** current calibration was fitted against a placeholder lexical
 encoder, not BGE-m3. Confidence figures derived from it are provisional.
+
+**Unconfirmed and blocking:** whether our telephony provider can stream call audio
+*during* the call rather than handing over a recording afterwards. If it is recordings
+only, V2 degrades to chunked near-real-time analysis and we say so in those words. TRAI
+and DoT clauses on live voice analysis are also unread.
 
 ---
 
@@ -54,7 +112,7 @@ encoder, not BGE-m3. Confidence figures derived from it are provisional.
 Folder ownership is absolute. Do not edit outside your folder — open a request instead.
 
 ```
-audio_ml/      A (Srujan)  speaker verification, VAD, anti-spoof, Android app
+audio_ml/      A (Srujan)  speaker verification, VAD, anti-spoof, React Native app
 nlp_rag/       B           corpus, ASR, retrieval, markers, scoring, reason codes
 server/        C           API layer, backend integration
 contracts.py   C           FROZEN — read only
@@ -87,24 +145,62 @@ pytest nlp_rag/                    # full suite — 191 tests, must stay green
 pytest nlp_rag/tests/test_<mod>.py # single module
 ```
 
-A red suite blocks the commit. Never `xfail` or delete a test to get a green run.
+A red suite blocks the commit. Never `xfail` or delete a test to get a green run. Run
+them before handing work back — reporting a pass count you did not observe is worse than
+reporting a failure.
+
+For model evaluation, report **cost-weighted metrics** (ASVspoof 5 standard) on unseen
+data, never a bare EER on data resembling the training set.
+
+---
+
+## Training data rules
+
+These are the difference between working and not working, not optional polish.
+
+- Train directly on **8 kHz G.711 and AMR-NB**. Phone compression destroys exactly the
+  detail the models rely on.
+- Train on noisy audio as well as clean.
+- Train across corpora; score only on unseen data.
+- **Watermark both classes or neither.**
+- Build and publish our own **Indian-accent false-positive benchmark**. Nobody else's
+  covers it. This is what the empty `corpus/heldout/` is blocking.
 
 ---
 
 ## Findings worth knowing
+
+**Lab accuracy does not survive the real world.** Published detectors reporting **2.85%**
+equal error rate on ASVspoof 2021 DF (Tak et al., Odyssey 2022, `arXiv:2202.12233`)
+degrade to **35.24%** on real-world multilingual audio (ML-ITW, Wuhan University — *ID
+not verified*). That gap is the project. Any claim we make is measured on unseen data or
+not made.
 
 **Simulated degradation is not a substitute for real phone audio.** We tested the
 condition-matched 8 kHz enrollment hypothesis and it was falsified — genuine
 phone-degraded audio outperformed simulated degradation by roughly 14.6%. We publish
 this rather than bury it.
 
-**Lab accuracy does not survive the real world.** Published detectors reporting ~2.85%
-equal error rate on ASVspoof 2021 DF degrade to ~35% on real-world multilingual audio
-(ML-ITW, Wuhan University). Any claim we make is measured on unseen data or not made.
-
 **Watermarking naively is worse than not watermarking.** Training on data where only the
 fakes carry a watermark produces a shortcut; watermarking a genuine voice then pushes
-error from ~16% to ~75% (Fraunhofer AISEC). Watermarks go on both classes or neither.
+error from ~16% to ~75% (Fraunhofer AISEC — *ID not verified*). Watermarks go on both
+classes or neither.
+
+**Noise-aware training recovers real ground.** Retraining on noisy audio recovered
+roughly 10–15 percentage points in harder conditions (NTU Singapore — *ID not verified*).
+
+**The attack works on people.** In a survey experiment with ~4,100 US adults, about
+**16.5%** said they would comply with an AI voice scam, rising to **36%** in the
+relative-in-distress scenario (Harvard Kennedy School / SEAS with Meta — *ID not
+verified*). Carry the caveat: US sample, stated intent, not Indian behaviour. For Indian
+fraud figures use I4C, NCRP or RBI with the financial year attached.
+
+**The Family Vault does not prove a caller is genuine.** A clone is *built* to match the
+real person's voiceprint. The vault reliably catches a different person impersonating
+family; catching a clone of an enrolled person needs the synthetic-speech check too.
+
+Four sources above are marked *ID not verified*. A human confirms them on arXiv before
+any goes on a slide.
 
 ---
 
@@ -114,9 +210,13 @@ These are product constraints, not paperwork.
 
 - **Embeddings, never audio.** Enrolment recordings are destroyed after the voiceprint.
 - No call recordings at rest. Analysis is in-flight.
-- Evidence layer stores a hash of the alert event — no audio, no transcript.
+- **Evidence layer:** each alert event is hashed, the hashes are folded into a Merkle
+  tree, and the root is published where it cannot be quietly rewritten. That proves a
+  single alert existed and predates the transfer, without exposing anyone else's call.
+  **No voice data on the ledger** — putting it there would breach DPDP data
+  minimisation. Handed to NCRP / 1930 on request.
 - Voiceprints are personal data under the DPDP Act 2023 (Rules notified November 2025).
-  Consent must be explicit; deletion must actually delete.
+  Consent must be explicit and revocable; deletion must actually delete.
 - **Never add a feature that modifies the call.** No injected audio, no synthetic speech
   into the stream. Our legal basis is one-party consent — our user is a genuine
   participant. Observing is defensible; altering is not.
@@ -127,13 +227,15 @@ Never commit: real audio, voiceprints, `.env`, keys, `corpus/heldout/`.
 
 ## Documents
 
-| File | Contents |
+| Document | Contents |
 |---|---|
+| SIH 2026 idea presentation (deck) | **Authoritative** — solution, technical approach, feasibility, impact, references |
+| SIH 26104 project report | **Authoritative** — full architecture, research findings, scope split, glossary, reading list |
 | `AGENTS.md` | Instructions for coding agents — ownership, constraints, settled facts |
 | `CLAUDE.md` | Claude Code specifics; imports `AGENTS.md` |
 | `GEMINI.md` | Gemini CLI / Antigravity pointer to `AGENTS.md` |
-| `PRD.md` | Product requirements |
-| `PLAN.md` | Build plan and milestones |
+
+The deck and the report are not committed to this repo and are not edited by agents.
 
 ---
 
@@ -141,14 +243,17 @@ Never commit: real audio, voiceprints, `.env`, keys, `corpus/heldout/`.
 
 Agents may update this README. Rules:
 
-1. **Only edit the Status table, Setup, Running tests, and Documents sections.** Findings
-   and Privacy sections change only when a human says so.
-2. **A status only moves to "Working" when a test proves it.** Name the test in the
+1. **The deck and the report win.** If this file contradicts either, this file is wrong —
+   fix it. If a change would contradict them, stop and say so; a human corrects those.
+2. **Only edit the Status table, Setup, Running tests, and Documents sections.** Findings,
+   Scope, Privacy and Pipeline change only when a human says so.
+3. **A status only moves to "Working" when a test proves it.** Name the test in the
    commit message. "It ran on my machine" is not a status change.
-3. **Never add a number this repo did not produce.** Figures under Findings carry a
-   source; anything without one does not go in.
-4. **Keep the Status table honest, especially about what is broken.** A README that
+4. **Never add a number this repo did not produce.** Figures under Findings carry a
+   source; anything without one does not go in, and *ID not verified* markers stay until
+   a human removes them.
+5. **Keep the Status table honest, especially about what is broken.** A README that
    overstates readiness costs more than one that is out of date.
-5. Update in the same commit as the change, not afterwards.
-6. Do not add badges, a roadmap, an acknowledgements section, or a features list that
-   duplicates the table above.
+6. Update in the same commit as the change, not afterwards.
+7. Do not add badges, a roadmap, an acknowledgements section, or a features list that
+   duplicates the tables above.

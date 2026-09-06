@@ -4,6 +4,13 @@
 
 Everything above applies. Claude Code specifics below.
 
+## The deck and the report win
+
+The SIH deck and the project report are authoritative for scope, architecture, numbers
+and claims. If code, `README.md`, or `AGENTS.md` contradicts them, the file is wrong —
+fix the file. If a *change you are asked to make* would contradict them, stop and say so;
+those two documents are corrected by a human, not by an agent.
+
 ## Skills
 
 This repo uses three custom skills. Reach for them by name:
@@ -12,6 +19,8 @@ This repo uses three custom skills. Reach for them by name:
 - `git-guardrails` — before any commit. It is the only thing standing between us and a
   cross-folder commit.
 - `grill-me` — before declaring a module done, and before anything goes on a slide.
+  Check the claim against the "How we are allowed to describe this" rules in AGENTS.md
+  before you check anything else.
 
 ## Working style
 
@@ -19,6 +28,9 @@ This repo uses three custom skills. Reach for them by name:
   the module smoke test actually run and its result reported, and any doc the change
   contradicts (`README.md`, module docstring/README, `AGENTS.md`) updated in the same
   turn. Code with no test run and no doc touched is an unfinished turn, not a handoff.
+- **Round 1 only.** Virtual-number routing, Family Vault, transcript scam-script
+  detection, payment blocking and on-device inference are Round 2 — described, not built.
+  Asked to build one, say it is out of scope for this round before starting.
 - **Plan before multi-file edits.** One paragraph, then wait. Do not start editing across
   three files and narrate as you go.
 - **One task per turn.** If the request contains two, do the first and name the second.
@@ -36,6 +48,12 @@ Say so plainly, once:
 - "Just make the test pass."
 - A dependency install to work around the Python 3.14 issue — flag the version mismatch
   instead; installing over it has burned time before.
+- Wording that says we **detect** deepfakes rather than **warn**, or that implies the
+  problem is solved. Report §8 is the whole reason we lead with the 2.85% → 35.24% gap.
+- "Matching the Family Vault proves the caller is real." It does not — a clone is built
+  to match the voiceprint.
+- Quoting the Harvard 16.5% / 36% figure without its caveat, or any of the four sources
+  marked *ID not verified* as if confirmed.
 
 ## Output
 
