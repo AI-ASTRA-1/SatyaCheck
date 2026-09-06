@@ -116,6 +116,9 @@ call.
 
 **Stack (deck, slide 3):** WebRTC · Python · PyTorch · WebSocket · FastAPI · React Native.
 
+`docs/interfaces.md` is the machine-checkable interface contract; the repo layout and
+ownership live in the README Repo state section.
+
 ---
 
 ## Audio acquisition, Exotel primary and WebRTC fallback

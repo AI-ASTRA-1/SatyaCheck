@@ -1,0 +1,37 @@
+[project]
+name = "satyacheck"
+version = "0.1.0"
+description = "SATYACHECK: real-time AI voice-clone scam warning (SIH 2026 SIH26104). Contracts + backend + ML monorepo."
+requires-python = ">=3.13"
+dependencies = [
+    "pydantic>=2.10",
+]
+
+[project.optional-dependencies]
+ml = [
+    "torch",
+    "torchaudio",
+    "transformers",
+    "onnxruntime",
+]
+runtime = [
+    "fastapi",
+    "uvicorn[standard]",
+    "websockets",
+    "redis",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "ruff>=0.9",
+    "mypy>=1.14",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["contracts", "acquisitions", "backend", "ml"]
+# app/ is excluded: it is Node/Expo, managed by npm, never part of the Python project.

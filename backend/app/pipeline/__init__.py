@@ -1,0 +1,1 @@
+"""Stage 03: live pipeline. Short buffer (Redis Streams), silence filtering, under 20 ms."""

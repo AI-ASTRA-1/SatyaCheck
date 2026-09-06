@@ -345,3 +345,43 @@ The deck and the report are not committed to this repo and are not edited by age
 5. Update in the same commit as the change, not afterwards.
 6. Do not add badges, a roadmap, an acknowledgements section, or a features list duplicating
    the tables above.
+
+## Repo state (not claims from the deck or the report)
+
+The following describes the repository layout and ownership as of this commit. It is not a
+claim from the deck or the report.
+
+### Layout and ownership
+
+| Directory | Owner | Contents |
+|---|---|---|
+| `contracts/` | Backend lead (editor) / all review | Schema-only Pydantic types for the seven-stage pipeline |
+| `acquisitions/exotel/` | Flex E | Exotel SDK to AudioChunk |
+| `acquisitions/webrtc/` | Flex E | WebRTC/RTP to AudioChunk (fallback) |
+| `backend/app/ingestion/` | Backend lead | Stage 02: decode and normalize to CanonicalAudioChunk |
+| `backend/app/pipeline/` | Backend lead | Stage 03: buffer, silence filter |
+| `backend/app/fusion/` | Backend lead | Stage 05: risk fusion engine |
+| `backend/app/response/` | Backend lead | Stage 06: WebSocket dispatch of AppMessage |
+| `backend/app/evidence/` | Flex F | Stage 07: alert fingerprint, Merkle |
+| `ml/checks/machine_fingerprint/` | ML A | XLS-R + AASIST check |
+| `ml/checks/speaker_identity/` | ML A | ECAPA-TDNN check |
+| `ml/checks/prosody/` | ML B | openSMILE check |
+| `ml/checks/stt_llm/` | ML B | STT then LLM check |
+| `ml/runner/` | ML B | CheckRunner (180 ms deadline) |
+| `app/` | RN/Expo lead | React Native + Expo overlay |
+| `docs/` | Backend lead | interfaces.md (single written source of truth) |
+| `tests/` | Backend lead | transport invariant + contracts smoke |
+
+### Environment
+
+- Python 3.13.15 (pinned via `.python-version`, managed by uv)
+- Node v22.23.2, npm 11.12.1
+- uv 0.12.1 for dependency management
+
+### Tests
+
+Two tests exist and pass:
+- `tests/test_contracts_smoke.py` (8 tests): import verification, JSON round-trips, framing rules
+- `tests/test_transport_invariant.py` (2 tests): AST-walk enforcement of the transport invariant
+
+Run: `uv run pytest tests/ -q`
