@@ -9,11 +9,11 @@ See [roles/R5.md](../../roles/R5.md) for the role specification.
 ## Capabilities
 
 1. **Live Risk View:**
-   - Real-time continuous score gauge (0 to 100).
+   - Full-width continuous score gauge (0 to 100) and live session telemetry.
    - Renders `RiskLevel` directly (`low`, `medium`, `high`, `critical`) without computing score bands in client code.
    - Live verdict indicator (`genuine`, `synthetic`, `unknown`).
    - Signal confidence meter (0 to 100%).
-   - Parallel AI check breakdown across all 4 checks:
+   - Full-width parallel AI check breakdown across all 4 checks:
      - Machine Fingerprints (XLS-R + AASIST)
      - Speaker Identity (ECAPA-TDNN)
      - Rhythm & Pitch (openSMILE)
@@ -22,8 +22,9 @@ See [roles/R5.md](../../roles/R5.md) for the role specification.
    - Stream metadata tracking (`stream_id`, `call_id`, sequence ticks, timestamps).
 
 2. **Alert History & Evidence Record:**
-   - Chronological scrollable feed of all session events and scoring updates, including `evidence_refs` tracking.
+   - Bottom dropdown lists for both Telemetry History and Call Concluded Summary.
    - Stage 07 call conclusion summary displaying duration, final verdict, final score, `alert_fingerprint` (SHA-256), off-ledger `merkle_root`, `root_published_at` timestamp, and `sealed_record_id`.
+   - Chronological scrollable feed of all session events and scoring updates, including `evidence_refs` tracking.
 
 3. **Connection State & Graceful Degradation:**
    - Handles `session_start`, `risk_update`, and `call_ended` discriminated union messages.

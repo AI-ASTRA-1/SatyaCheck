@@ -58,8 +58,9 @@
   const elReasonsContainer = document.getElementById('reasons-container');
   const elReasonsBadge = document.getElementById('reasons-count-badge');
 
-  // Call Ended Card
+  // Call Ended Card & Toggle
   const elCallEndedCard = document.getElementById('call-ended-card');
+  const elEndedCardToggle = document.getElementById('ended-card-toggle');
   const elEndedVerdict = document.getElementById('ended-verdict');
   const elEndedLevel = document.getElementById('ended-level');
   const elEndedScore = document.getElementById('ended-score');
@@ -69,7 +70,9 @@
   const elEndedRootPublishedAt = document.getElementById('ended-root-published-at');
   const elEndedRecordId = document.getElementById('ended-record-id');
 
-  // History feed
+  // History feed & Toggle
+  const elHistoryCard = document.getElementById('history-card');
+  const elHistoryCardToggle = document.getElementById('history-card-toggle');
   const elHistoryFeed = document.getElementById('history-feed-list');
   const elHistoryEmpty = document.getElementById('history-empty-msg');
   const elHistoryCount = document.getElementById('history-item-count');
@@ -258,8 +261,9 @@
     elSessionPulse.className = 'pulse-indicator idle';
     elSessionState.textContent = 'Call Ended';
 
-    // Render Stage 07 summary card
+    // Render Stage 07 summary card & ensure expanded
     elCallEndedCard.classList.remove('hidden');
+    elCallEndedCard.classList.remove('collapsed');
     elEndedVerdict.textContent = (msg.final_verdict || '').toUpperCase();
     elEndedLevel.textContent = (msg.final_level || '').toUpperCase();
     elEndedScore.textContent = `${msg.final_score} / 100`;
@@ -505,6 +509,31 @@
   if (elChkAutoLoop) {
     elChkAutoLoop.addEventListener('change', (e) => {
       sendControlMessage({ action: 'set_loop', loop: e.target.checked });
+    });
+  }
+
+  // Collapsible Dropdown Accordions
+  if (elEndedCardToggle && elCallEndedCard) {
+    elEndedCardToggle.addEventListener('click', () => {
+      elCallEndedCard.classList.toggle('collapsed');
+    });
+    elEndedCardToggle.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        elCallEndedCard.classList.toggle('collapsed');
+      }
+    });
+  }
+
+  if (elHistoryCardToggle && elHistoryCard) {
+    elHistoryCardToggle.addEventListener('click', () => {
+      elHistoryCard.classList.toggle('collapsed');
+    });
+    elHistoryCardToggle.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        elHistoryCard.classList.toggle('collapsed');
+      }
     });
   }
 

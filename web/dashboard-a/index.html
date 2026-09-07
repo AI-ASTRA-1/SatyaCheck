@@ -111,11 +111,10 @@
       </div>
     </div>
 
-    <!-- Main Grid -->
-    <main class="dashboard-grid">
-      <!-- Left Column: Primary Live Risk Analysis -->
-      <section class="grid-col live-col">
-        <!-- Live Risk Verdict Hero Card -->
+    <!-- Main Layout (Full-Width Live Sections with Bottom Dropdown Lists) -->
+    <main class="dashboard-main-full">
+      <!-- 1. Live Risk Verdict Hero Card (Full Width) -->
+      <section class="live-section">
         <div class="card card-hero-risk" id="hero-risk-card">
           <div class="card-header">
             <h2 class="card-title">Live Risk Scoring</h2>
@@ -161,8 +160,10 @@
             </div>
           </div>
         </div>
+      </section>
 
-        <!-- 4 AI Checks Status Grid (Stage 04) -->
+      <!-- 2. Parallel AI Checks Status Grid (Stage 04 - Full Width) -->
+      <section class="live-section">
         <div class="card checks-card">
           <div class="card-header">
             <h2 class="card-title">Parallel AI Checks (Stage 04, ≤180ms)</h2>
@@ -174,7 +175,7 @@
             <div class="check-item" id="check-machine_fingerprint">
               <div class="check-top">
                 <span class="check-icon">🌊</span>
-                <span class="check-status-pill neutral" id="status-machine_fingerprint">Idle</span>
+                <span class="check-status-pill neutral" id="status-machine_fingerprint">Idle / Unknown</span>
               </div>
               <div class="check-name">Machine Fingerprints</div>
               <div class="check-model">XLS-R + AASIST</div>
@@ -185,7 +186,7 @@
             <div class="check-item" id="check-speaker_identity">
               <div class="check-top">
                 <span class="check-icon">👤</span>
-                <span class="check-status-pill neutral" id="status-speaker_identity">Idle</span>
+                <span class="check-status-pill neutral" id="status-speaker_identity">Idle / Unknown</span>
               </div>
               <div class="check-name">Speaker Identity</div>
               <div class="check-model">ECAPA-TDNN</div>
@@ -196,7 +197,7 @@
             <div class="check-item" id="check-prosody">
               <div class="check-top">
                 <span class="check-icon">🎵</span>
-                <span class="check-status-pill neutral" id="status-prosody">Idle</span>
+                <span class="check-status-pill neutral" id="status-prosody">Idle / Unknown</span>
               </div>
               <div class="check-name">Rhythm & Pitch</div>
               <div class="check-model">openSMILE</div>
@@ -207,7 +208,7 @@
             <div class="check-item" id="check-stt_llm">
               <div class="check-top">
                 <span class="check-icon">💬</span>
-                <span class="check-status-pill neutral" id="status-stt_llm">Idle</span>
+                <span class="check-status-pill neutral" id="status-stt_llm">Idle / Unknown</span>
               </div>
               <div class="check-name">Script Analysis</div>
               <div class="check-model">Whisper + SLM</div>
@@ -215,8 +216,10 @@
             </div>
           </div>
         </div>
+      </section>
 
-        <!-- Active Evidence & Reason Codes -->
+      <!-- 3. Active Evidence & Reason Codes (Full Width) -->
+      <section class="live-section">
         <div class="card reasons-card">
           <div class="card-header">
             <h2 class="card-title">Triggered Reasons & Evidence Codes</h2>
@@ -228,65 +231,73 @@
         </div>
       </section>
 
-      <!-- Right Column: Alert History & Event Feed -->
-      <section class="grid-col history-col">
-        <!-- Call Summary Box (Shows when call ends) -->
-        <div class="card call-ended-card hidden" id="call-ended-card">
-          <div class="card-header">
-            <h2 class="card-title">Call Concluded Summary (Stage 07)</h2>
+      <!-- 4. Dropdown Lists Section (Placed below live monitoring) -->
+      <section class="dropdowns-section">
+        <!-- Call Summary Box (Collapsible Dropdown Card) -->
+        <div class="card call-ended-card collapsible-card hidden" id="call-ended-card">
+          <div class="card-header collapsible-header" id="ended-card-toggle" role="button" tabindex="0" title="Click to expand/collapse Call Concluded Summary">
+            <div class="collapsible-title-group">
+              <span class="dropdown-chevron" id="ended-chevron">▼</span>
+              <h2 class="card-title">Call Concluded Summary (Stage 07)</h2>
+            </div>
             <span class="badge badge-sealed" id="sealed-record-pill">Sealed Record</span>
           </div>
-          <div class="ended-grid">
-            <div class="ended-item">
-              <span class="label">Final Verdict</span>
-              <span class="val bold" id="ended-verdict">—</span>
-            </div>
-            <div class="ended-item">
-              <span class="label">Final Risk Level</span>
-              <span class="val bold" id="ended-level">—</span>
-            </div>
-            <div class="ended-item">
-              <span class="label">Final Score</span>
-              <span class="val mono" id="ended-score">—</span>
-            </div>
-            <div class="ended-item">
-              <span class="label">Duration</span>
-              <span class="val mono" id="ended-duration">—</span>
-            </div>
-            <div class="ended-item full-width">
-              <span class="label">Alert Fingerprint (SHA-256)</span>
-              <span class="val mono hash" id="ended-fingerprint">None (No alert triggered)</span>
-            </div>
-            <div class="ended-item full-width">
-              <span class="label">Merkle Root Off-Ledger Anchor</span>
-              <span class="val mono hash" id="ended-merkle">None</span>
-            </div>
-            <div class="ended-item full-width">
-              <span class="label">Merkle Root Published At</span>
-              <span class="val mono" id="ended-root-published-at">None</span>
-            </div>
-            <div class="ended-item full-width">
-              <span class="label">NCRP / 1930 Sealed Record ID</span>
-              <span class="val mono" id="ended-record-id">None</span>
+          <div class="collapsible-content" id="ended-collapsible-content">
+            <div class="ended-grid">
+              <div class="ended-item">
+                <span class="label">Final Verdict</span>
+                <span class="val bold" id="ended-verdict">—</span>
+              </div>
+              <div class="ended-item">
+                <span class="label">Final Risk Level</span>
+                <span class="val bold" id="ended-level">—</span>
+              </div>
+              <div class="ended-item">
+                <span class="label">Final Score</span>
+                <span class="val mono" id="ended-score">—</span>
+              </div>
+              <div class="ended-item">
+                <span class="label">Duration</span>
+                <span class="val mono" id="ended-duration">—</span>
+              </div>
+              <div class="ended-item full-width">
+                <span class="label">Alert Fingerprint (SHA-256)</span>
+                <span class="val mono hash" id="ended-fingerprint">None (No alert triggered)</span>
+              </div>
+              <div class="ended-item full-width">
+                <span class="label">Merkle Root Off-Ledger Anchor</span>
+                <span class="val mono hash" id="ended-merkle">None</span>
+              </div>
+              <div class="ended-item full-width">
+                <span class="label">Merkle Root Published At</span>
+                <span class="val mono" id="ended-root-published-at">None</span>
+              </div>
+              <div class="ended-item full-width">
+                <span class="label">NCRP / 1930 Sealed Record ID</span>
+                <span class="val mono" id="ended-record-id">None</span>
+              </div>
             </div>
           </div>
         </div>
 
-        <!-- Scrollable Feed of Telemetry & Alerts -->
-        <div class="card history-card">
-          <div class="card-header">
+        <!-- Scrollable Feed of Telemetry & Alerts (Collapsible Dropdown Card) -->
+        <div class="card history-card collapsible-card" id="history-card">
+          <div class="card-header collapsible-header" id="history-card-toggle" role="button" tabindex="0" title="Click to expand/collapse Telemetry Feed">
             <div class="history-title-group">
+              <span class="dropdown-chevron" id="history-chevron">▼</span>
               <h2 class="card-title">Telemetry & Alert History</h2>
               <span class="history-count" id="history-item-count">0 items</span>
             </div>
-            <div class="history-actions">
+            <div class="history-actions" onclick="event.stopPropagation()">
               <button class="btn btn-xs btn-outline" id="btn-clear-history">Clear</button>
             </div>
           </div>
 
-          <div class="history-list" id="history-feed-list">
-            <div class="history-empty" id="history-empty-msg">
-              <span>Awaiting stream telemetry updates...</span>
+          <div class="collapsible-content" id="history-collapsible-content">
+            <div class="history-list" id="history-feed-list">
+              <div class="history-empty" id="history-empty-msg">
+                <span>Awaiting stream telemetry updates...</span>
+              </div>
             </div>
           </div>
         </div>
