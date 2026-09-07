@@ -1,0 +1,10 @@
+{
+  "name": "satyacheck-overlay",
+  "version": "1.0.0",
+  "description": "Android SYSTEM_ALERT_WINDOW overlay native module for SATYACHECK.",
+  "main": "index.ts",
+  "private": true,
+  "peerDependencies": {
+    "expo-modules-core": "*"
+  }
+}

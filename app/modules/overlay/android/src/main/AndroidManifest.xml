@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Required to draw over other apps (foreground call UI). -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
+    <!-- Required to start a foreground service on Android 9+. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+
+    <application>
+        <!--
+          OverlayService: manages the TYPE_APPLICATION_OVERLAY window.
+          Runs as a foreground service so the process stays alive while
+          the user is on a call with the SATYACHECK app in the background.
+          exported=false: only the SATYACHECK app can start it.
+        -->
+        <service
+            android:name="com.aiastra.satyacheckoverlay.OverlayService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="call_safety_alert_overlay" />
+        </service>
+    </application>
+
+</manifest>

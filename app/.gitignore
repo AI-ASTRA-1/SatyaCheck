@@ -1,0 +1,25 @@
+node_modules/
+.expo/
+dist/
+npm-debug.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+
+# Build outputs
+**/build/
+**/.gradle/
+**/.cxx/
+**/local.properties
+*.apk
+*.aab
+*.bundle
+
+# Temp files
+*.png.tmp
+phone_*.png
+screen*.png
+
