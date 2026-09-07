@@ -215,15 +215,15 @@ body {
 }
 
 .badge-prototype {
-  background: var(--accent-dim);
-  color: var(--accent);
-  border: 1px solid var(--accent-glow);
+  background: #143322;
+  color: #ffffff;
+  border: 1px solid rgba(201, 247, 111, 0.3);
 }
 
 .badge-sih {
-  background: var(--purple-dim);
-  color: var(--purple);
-  border: 1px solid rgba(124, 58, 237, 0.35);
+  background: #2b1350;
+  color: #ffffff;
+  border: 1px solid rgba(124, 58, 237, 0.4);
 }
 
 .header-status-group {
@@ -483,53 +483,54 @@ body {
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  padding: 0.4rem 0.85rem;
+  padding: 0.45rem 0.9rem;
   border-radius: var(--radius-sm);
   font-size: 0.78rem;
   font-weight: 600;
   cursor: pointer;
+  color: #ffffff;
   transition: var(--transition-fast);
 }
 
 .btn-scenario-genuine {
-  background: var(--risk-low-bg);
-  color: var(--risk-low);
-  border: 1px solid var(--risk-low);
+  background: #123824;
+  color: #ffffff;
+  border: 1px solid rgba(201, 247, 111, 0.4);
 }
 
 .btn-scenario-genuine:hover {
-  background: rgba(16, 185, 129, 0.25);
+  background: #1a4d32;
 }
 
 .btn-scenario-attack {
-  background: var(--risk-critical-bg);
-  color: var(--risk-critical);
-  border: 1px solid var(--risk-critical);
+  background: #4a151b;
+  color: #ffffff;
+  border: 1px solid rgba(239, 68, 68, 0.5);
 }
 
 .btn-scenario-attack:hover {
-  background: rgba(239, 68, 68, 0.28);
+  background: #611c24;
 }
 
 .btn-scenario-degraded {
-  background: var(--risk-medium-bg);
-  color: var(--risk-medium);
-  border: 1px solid var(--risk-medium);
+  background: #4a2a07;
+  color: #ffffff;
+  border: 1px solid rgba(245, 158, 11, 0.5);
 }
 
 .btn-scenario-degraded:hover {
-  background: rgba(245, 158, 11, 0.25);
+  background: #63390a;
 }
 
 .btn-scenario-stop {
-  background: var(--bg-surface);
-  color: var(--text-muted);
-  border: 1px solid var(--border-subtle);
+  background: #1e1e2f;
+  color: #ffffff;
+  border: 1px solid var(--border-strong);
 }
 
 .btn-scenario-stop:hover {
-  color: var(--text-primary);
-  border-color: var(--border-strong);
+  background: #2a2a40;
+  color: #ffffff;
 }
 
 .loop-toggle-group {
@@ -622,21 +623,21 @@ body {
 }
 
 .verdict-unknown {
-  background: rgba(139, 92, 246, 0.15);
-  color: var(--verdict-unknown);
-  border: 1px solid var(--verdict-unknown);
+  background: #2b1350;
+  color: #ffffff;
+  border: 1px solid #7c3aed;
 }
 
 .verdict-genuine {
-  background: rgba(6, 182, 212, 0.15);
-  color: var(--verdict-genuine);
-  border: 1px solid var(--verdict-genuine);
+  background: #123824;
+  color: #ffffff;
+  border: 1px solid rgba(201, 247, 111, 0.4);
 }
 
 .verdict-synthetic {
-  background: rgba(244, 63, 94, 0.15);
-  color: var(--verdict-synthetic);
-  border: 1px solid var(--verdict-synthetic);
+  background: #4a151b;
+  color: #ffffff;
+  border: 1px solid #ef4444;
 }
 
 .risk-display-row {
@@ -744,27 +745,27 @@ body {
 }
 
 .level-low {
-  background: var(--risk-low-bg);
-  color: var(--risk-low);
-  border: 1px solid var(--risk-low);
+  background: #123824;
+  color: #ffffff;
+  border: 1px solid rgba(201, 247, 111, 0.4);
 }
 
 .level-medium {
-  background: var(--risk-medium-bg);
-  color: var(--risk-medium);
-  border: 1px solid var(--risk-medium);
+  background: #4a2a07;
+  color: #ffffff;
+  border: 1px solid rgba(245, 158, 11, 0.5);
 }
 
 .level-high {
-  background: var(--risk-high-bg);
-  color: var(--risk-high);
-  border: 1px solid var(--risk-high);
+  background: #542207;
+  color: #ffffff;
+  border: 1px solid rgba(249, 115, 22, 0.5);
 }
 
 .level-critical {
-  background: var(--risk-critical-bg);
-  color: var(--risk-critical);
-  border: 1px solid var(--risk-critical);
+  background: #4a151b;
+  color: #ffffff;
+  border: 1px solid rgba(239, 68, 68, 0.5);
 }
 
 .risk-band-disclaimer {
@@ -853,21 +854,21 @@ body {
 }
 
 .check-status-pill.neutral {
-  background: var(--bg-card);
-  color: var(--text-muted);
+  background: #1a1a27;
+  color: #e2e8f0;
   border: 1px solid var(--border-subtle);
 }
 
 .check-status-pill.contributing {
-  background: var(--accent-dim);
-  color: var(--accent);
-  border: 1px solid var(--accent);
+  background: #123824;
+  color: #ffffff;
+  border: 1px solid rgba(201, 247, 111, 0.4);
 }
 
 .check-status-pill.degraded {
-  background: var(--risk-medium-bg);
-  color: var(--risk-medium);
-  border: 1px solid var(--risk-medium);
+  background: #4a2a07;
+  color: #ffffff;
+  border: 1px solid rgba(245, 158, 11, 0.5);
 }
 
 .check-name {
@@ -918,21 +919,21 @@ body {
 }
 
 .reason-tag.synthetic-hazard {
-  background: var(--risk-critical-bg);
-  border-color: var(--risk-critical);
-  color: var(--risk-critical);
+  background: #4a151b;
+  border-color: rgba(239, 68, 68, 0.5);
+  color: #ffffff;
 }
 
 .reason-tag.genuine-safe {
-  background: var(--risk-low-bg);
-  border-color: var(--risk-low);
-  color: var(--risk-low);
+  background: #123824;
+  border-color: rgba(201, 247, 111, 0.4);
+  color: #ffffff;
 }
 
 .reason-tag.degraded-warn {
-  background: var(--risk-medium-bg);
-  border-color: var(--risk-medium);
-  color: var(--risk-medium);
+  background: #4a2a07;
+  border-color: rgba(245, 158, 11, 0.5);
+  color: #ffffff;
 }
 
 /* ==================== Call Ended Summary ==================== */
@@ -946,9 +947,9 @@ body {
 }
 
 .badge-sealed {
-  background: var(--purple-dim);
-  color: var(--purple);
-  border: 1px solid rgba(124, 58, 237, 0.4);
+  background: #2b1350;
+  color: #ffffff;
+  border: 1px solid rgba(124, 58, 237, 0.5);
 }
 
 .ended-grid {
