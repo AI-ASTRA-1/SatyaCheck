@@ -425,6 +425,118 @@ body {
   color: var(--text-primary);
 }
 
+/* ==================== Controls Toolbar ==================== */
+.controls-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  padding: 0.75rem 1.25rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+}
+
+.controls-title-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.controls-icon {
+  font-size: 1.1rem;
+}
+
+.controls-heading {
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--text-secondary);
+}
+
+.scenario-btn-group {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.btn-scenario {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.85rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.btn-scenario-genuine {
+  background: var(--risk-low-bg);
+  color: var(--risk-low);
+  border: 1px solid var(--risk-low);
+}
+
+.btn-scenario-genuine:hover {
+  background: rgba(16, 185, 129, 0.25);
+}
+
+.btn-scenario-attack {
+  background: var(--risk-critical-bg);
+  color: var(--risk-critical);
+  border: 1px solid var(--risk-critical);
+}
+
+.btn-scenario-attack:hover {
+  background: rgba(239, 68, 68, 0.28);
+}
+
+.btn-scenario-degraded {
+  background: var(--risk-medium-bg);
+  color: var(--risk-medium);
+  border: 1px solid var(--risk-medium);
+}
+
+.btn-scenario-degraded:hover {
+  background: rgba(245, 158, 11, 0.25);
+}
+
+.btn-scenario-stop {
+  background: var(--bg-surface);
+  color: var(--text-muted);
+  border: 1px solid var(--border-subtle);
+}
+
+.btn-scenario-stop:hover {
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+}
+
+.loop-toggle-group {
+  display: flex;
+  align-items: center;
+}
+
+.loop-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.loop-checkbox-label input {
+  cursor: pointer;
+  accent-color: #0ea5e9;
+}
+
 /* ==================== Grid Layout ==================== */
 .dashboard-grid {
   display: grid;

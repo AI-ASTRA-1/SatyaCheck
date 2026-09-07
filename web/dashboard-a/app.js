@@ -21,6 +21,13 @@
   const elBanner = document.getElementById('disconnected-banner');
   const elBtnRetry = document.getElementById('btn-banner-retry');
 
+  // Scenario simulation controls
+  const elBtnPlayGenuine = document.getElementById('btn-play-genuine');
+  const elBtnPlayAttack = document.getElementById('btn-play-attack');
+  const elBtnPlayDegraded = document.getElementById('btn-play-degraded');
+  const elBtnStopCall = document.getElementById('btn-stop-call');
+  const elChkAutoLoop = document.getElementById('chk-auto-loop');
+
   // Call session bar
   const elSessionPulse = document.getElementById('session-pulse');
   const elSessionState = document.getElementById('session-state-text');
@@ -440,10 +447,44 @@
     applyTheme(newTheme);
   }
 
+  function sendControlMessage(payload) {
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify(payload));
+    }
+  }
+
   // Event Listeners
   if (elBtnThemeToggle) {
     elBtnThemeToggle.addEventListener('click', toggleTheme);
   }
+  if (elBtnPlayGenuine) {
+    elBtnPlayGenuine.addEventListener('click', () => {
+      sendControlMessage({ action: 'play', scenario: 'genuine' });
+    });
+  }
+  if (elBtnPlayAttack) {
+    elBtnPlayAttack.addEventListener('click', () => {
+      sendControlMessage({ action: 'play', scenario: 'attack' });
+    });
+  }
+  if (elBtnPlayDegraded) {
+    elBtnPlayDegraded.addEventListener('click', () => {
+      sendControlMessage({ action: 'play', scenario: 'degraded' });
+    });
+  }
+  if (elBtnStopCall) {
+    elBtnStopCall.addEventListener('click', () => {
+      sendControlMessage({ action: 'stop' });
+      elSessionPulse.className = 'pulse-indicator idle';
+      elSessionState.textContent = 'Stream Paused';
+    });
+  }
+  if (elChkAutoLoop) {
+    elChkAutoLoop.addEventListener('change', (e) => {
+      sendControlMessage({ action: 'set_loop', loop: e.target.checked });
+    });
+  }
+
   elBtnReconnect.addEventListener('click', connectWebSocket);
   elBtnRetry.addEventListener('click', connectWebSocket);
   elBtnClearHistory.addEventListener('click', clearHistory);

@@ -83,6 +83,34 @@
       </div>
     </div>
 
+    <!-- Interactive Simulation Controls Toolbar -->
+    <div class="controls-toolbar" id="controls-toolbar">
+      <div class="controls-title-group">
+        <span class="controls-icon">🎮</span>
+        <span class="controls-heading">Call Simulator Controls:</span>
+      </div>
+      <div class="scenario-btn-group">
+        <button id="btn-play-genuine" class="btn btn-scenario btn-scenario-genuine" title="Simulate genuine human call with Indian accent">
+          <span class="btn-icon">✓</span> Genuine Call
+        </button>
+        <button id="btn-play-attack" class="btn btn-scenario btn-scenario-attack" title="Simulate AI-cloned voice impersonation attack">
+          <span class="btn-icon">⚠️</span> Voice Clone Attack
+        </button>
+        <button id="btn-play-degraded" class="btn btn-scenario btn-scenario-degraded" title="Simulate degraded clone with acoustic noise">
+          <span class="btn-icon">⚡</span> Degraded Clone
+        </button>
+        <button id="btn-stop-call" class="btn btn-scenario btn-scenario-stop" title="Stop current stream">
+          <span class="btn-icon">⏹</span> Stop Stream
+        </button>
+      </div>
+      <div class="loop-toggle-group">
+        <label class="loop-checkbox-label">
+          <input type="checkbox" id="chk-auto-loop" />
+          <span>Auto-Repeat Calls</span>
+        </label>
+      </div>
+    </div>
+
     <!-- Main Grid -->
     <main class="dashboard-grid">
       <!-- Left Column: Primary Live Risk Analysis -->

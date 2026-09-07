@@ -206,36 +206,81 @@ async def scenario_degraded_clone(stream_id: str, call_id: str) -> AsyncGenerato
     yield end.model_dump_json()
 
 
+async def run_scenario(websocket: WebSocketServerProtocol, scenario_name: str, call_id_num: int) -> None:
+    """Runs a single chosen scenario."""
+    if scenario_name == "genuine":
+        stream_id = f"st_gen_{call_id_num}"
+        call_id = f"call_gen_{call_id_num}"
+        async for msg in scenario_genuine_call(stream_id, call_id):
+            await websocket.send(msg)
+    elif scenario_name == "attack":
+        stream_id = f"st_atk_{call_id_num}"
+        call_id = f"call_atk_{call_id_num}"
+        async for msg in scenario_clone_attack(stream_id, call_id):
+            await websocket.send(msg)
+    elif scenario_name == "degraded":
+        stream_id = f"st_deg_{call_id_num}"
+        call_id = f"call_deg_{call_id_num}"
+        async for msg in scenario_degraded_clone(stream_id, call_id):
+            await websocket.send(msg)
+    elif scenario_name == "all":
+        # Run all 3 in sequence once
+        async for msg in scenario_genuine_call(f"st_gen_{call_id_num}", f"call_gen_{call_id_num}"):
+            await websocket.send(msg)
+        await asyncio.sleep(2.0)
+        async for msg in scenario_clone_attack(f"st_atk_{call_id_num}", f"call_atk_{call_id_num}"):
+            await websocket.send(msg)
+        await asyncio.sleep(2.0)
+        async for msg in scenario_degraded_clone(f"st_deg_{call_id_num}", f"call_deg_{call_id_num}"):
+            await websocket.send(msg)
+
+
 async def handler(websocket: WebSocketServerProtocol) -> None:
-    """Client connection handler. Loops through all three scenarios with brief pauses."""
+    """Client connection handler with interactive scenario triggering."""
     print(f"[WS] Client connected: {websocket.remote_address}")
     call_counter = 1
+    current_task: asyncio.Task | None = None
+    loop_mode = False
+
+    async def scenario_worker(scenario_type: str) -> None:
+        nonlocal call_counter
+        try:
+            while True:
+                await run_scenario(websocket, scenario_type, call_counter)
+                call_counter += 1
+                if not loop_mode:
+                    break
+                await asyncio.sleep(3.0)
+        except asyncio.CancelledError:
+            pass
+        except websockets.exceptions.ConnectionClosed:
+            pass
+
+    # Start genuine call scenario once on first connect
+    current_task = asyncio.create_task(scenario_worker("genuine"))
+
     try:
-        while True:
-            # 1. Genuine Call
-            stream_id = f"st_gen_{call_counter}"
-            call_id = f"call_gen_{call_counter}"
-            async for msg in scenario_genuine_call(stream_id, call_id):
-                await websocket.send(msg)
-            await asyncio.sleep(3.0)
-
-            # 2. Cloned Voice Attack
-            stream_id = f"st_atk_{call_counter}"
-            call_id = f"call_atk_{call_counter}"
-            async for msg in scenario_clone_attack(stream_id, call_id):
-                await websocket.send(msg)
-            await asyncio.sleep(3.0)
-
-            # 3. Degraded Clone
-            stream_id = f"st_deg_{call_counter}"
-            call_id = f"call_deg_{call_counter}"
-            async for msg in scenario_degraded_clone(stream_id, call_id):
-                await websocket.send(msg)
-            await asyncio.sleep(4.0)
-
-            call_counter += 1
+        async for message_str in websocket:
+            try:
+                data = json.loads(message_str)
+                action = data.get("action")
+                if action == "play":
+                    scenario = data.get("scenario", "genuine")
+                    if current_task and not current_task.done():
+                        current_task.cancel()
+                    current_task = asyncio.create_task(scenario_worker(scenario))
+                elif action == "stop":
+                    if current_task and not current_task.done():
+                        current_task.cancel()
+                elif action == "set_loop":
+                    loop_mode = bool(data.get("loop", False))
+            except json.JSONDecodeError:
+                pass
     except websockets.exceptions.ConnectionClosed:
         print(f"[WS] Client disconnected: {websocket.remote_address}")
+    finally:
+        if current_task and not current_task.done():
+            current_task.cancel()
 
 
 def start_http_server() -> None:
