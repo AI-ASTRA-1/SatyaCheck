@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SATYACHECK — Real-Time Voice Clone Risk Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="theme-dark">
+  <div class="app-container">
+    <!-- Top Navigation / Header -->
+    <header class="app-header">
+      <div class="brand-group">
+        <div class="brand-logo-ring">
+          <div class="radar-sweep"></div>
+          <span class="shield-icon">🛡️</span>
+        </div>
+        <div>
+          <div class="brand-title-row">
+            <h1 class="brand-title">SATYACHECK</h1>
+            <span class="badge badge-prototype">Prototype A</span>
+            <span class="badge badge-sih">SIH26104</span>
+          </div>
+          <p class="brand-subtitle">Real Voice · Real Person · Real-Time Protection</p>
+        </div>
+      </div>
+
+      <div class="header-status-group">
+        <div class="status-chip" id="connection-status-chip">
+          <span class="status-dot disconnected" id="connection-dot"></span>
+          <span class="status-text" id="connection-text">Disconnected</span>
+        </div>
+        <div class="ws-url-box">
+          <input type="text" id="ws-url-input" value="ws://127.0.0.1:8765" placeholder="ws://localhost:8765" />
+          <button id="btn-reconnect" class="btn btn-secondary">Connect</button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Disconnected Alert Banner -->
+    <div id="disconnected-banner" class="alert-banner hidden">
+      <div class="banner-content">
+        <span class="banner-icon">⚠️</span>
+        <div>
+          <strong>Backend Stream Disconnected</strong>
+          <span>Live telemetry is paused. Reconnecting to local stream engine...</span>
+        </div>
+      </div>
+      <button id="btn-banner-retry" class="btn btn-sm btn-outline">Retry Now</button>
+    </div>
+
+    <!-- Active Call Header Bar -->
+    <div class="call-session-bar" id="call-session-bar">
+      <div class="session-col">
+        <span class="label">Call State</span>
+        <div class="value-row">
+          <span class="pulse-indicator idle" id="session-pulse"></span>
+          <span class="session-state-text" id="session-state-text">Waiting for Call...</span>
+        </div>
+      </div>
+      <div class="session-col">
+        <span class="label">Stream ID</span>
+        <span class="value mono" id="session-stream-id">—</span>
+      </div>
+      <div class="session-col">
+        <span class="label">Call ID</span>
+        <span class="value mono" id="session-call-id">—</span>
+      </div>
+      <div class="session-col">
+        <span class="label">Protected User</span>
+        <span class="value mono" id="session-protected-num">—</span>
+      </div>
+      <div class="session-col">
+        <span class="label">Scoring Tick</span>
+        <span class="value mono" id="session-sequence">#0</span>
+      </div>
+    </div>
+
+    <!-- Main Grid -->
+    <main class="dashboard-grid">
+      <!-- Left Column: Primary Live Risk Analysis -->
+      <section class="grid-col live-col">
+        <!-- Live Risk Verdict Hero Card -->
+        <div class="card card-hero-risk" id="hero-risk-card">
+          <div class="card-header">
+            <h2 class="card-title">Live Risk Scoring</h2>
+            <div class="verdict-tag verdict-unknown" id="verdict-badge">VERDICT: UNKNOWN</div>
+          </div>
+
+          <div class="risk-display-row">
+            <!-- Radial Gauge -->
+            <div class="gauge-container">
+              <svg class="radial-gauge" viewBox="0 0 160 160">
+                <circle class="gauge-bg" cx="80" cy="80" r="68"></circle>
+                <circle class="gauge-fill" id="gauge-fill-circle" cx="80" cy="80" r="68"></circle>
+              </svg>
+              <div class="gauge-inner-content">
+                <span class="score-value" id="risk-score-value">0</span>
+                <span class="score-scale">/ 100</span>
+                <span class="score-label">Risk Score</span>
+              </div>
+            </div>
+
+            <!-- Risk Details -->
+            <div class="risk-summary-details">
+              <div class="detail-block">
+                <span class="detail-label">Risk Level</span>
+                <div class="risk-level-badge level-low" id="risk-level-badge">LOW</div>
+                <p class="risk-band-disclaimer">Backend policy maps score to RiskLevel state</p>
+              </div>
+
+              <div class="detail-block">
+                <div class="confidence-header">
+                  <span class="detail-label">Signal Confidence</span>
+                  <span class="confidence-val mono" id="confidence-val">0%</span>
+                </div>
+                <div class="progress-bar-container">
+                  <div class="progress-bar-fill" id="confidence-progress" style="width: 0%;"></div>
+                </div>
+              </div>
+
+              <div class="detail-block">
+                <span class="detail-label">Last Scoring Tick</span>
+                <span class="timestamp-val mono" id="last-update-time">—</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4 AI Checks Status Grid (Stage 04) -->
+        <div class="card checks-card">
+          <div class="card-header">
+            <h2 class="card-title">Parallel AI Checks (Stage 04, ≤180ms)</h2>
+            <span class="card-badge">Copy-based Analysis</span>
+          </div>
+          
+          <div class="checks-grid">
+            <!-- Check 1: Machine Fingerprints -->
+            <div class="check-item" id="check-machine_fingerprint">
+              <div class="check-top">
+                <span class="check-icon">🌊</span>
+                <span class="check-status-pill neutral" id="status-machine_fingerprint">Idle</span>
+              </div>
+              <div class="check-name">Machine Fingerprints</div>
+              <div class="check-model">XLS-R + AASIST</div>
+              <div class="check-desc">Synthesized waveform artifacts & acoustic anomalies</div>
+            </div>
+
+            <!-- Check 2: Speaker Identity -->
+            <div class="check-item" id="check-speaker_identity">
+              <div class="check-top">
+                <span class="check-icon">👤</span>
+                <span class="check-status-pill neutral" id="status-speaker_identity">Idle</span>
+              </div>
+              <div class="check-name">Speaker Identity</div>
+              <div class="check-model">ECAPA-TDNN</div>
+              <div class="check-desc">Voiceprint matching (No enrolment in Round 1)</div>
+            </div>
+
+            <!-- Check 3: Prosody -->
+            <div class="check-item" id="check-prosody">
+              <div class="check-top">
+                <span class="check-icon">🎵</span>
+                <span class="check-status-pill neutral" id="status-prosody">Idle</span>
+              </div>
+              <div class="check-name">Rhythm & Pitch</div>
+              <div class="check-model">openSMILE</div>
+              <div class="check-desc">Prosodic jitter, pitch contour irregularities</div>
+            </div>
+
+            <!-- Check 4: STT + LLM -->
+            <div class="check-item" id="check-stt_llm">
+              <div class="check-top">
+                <span class="check-icon">💬</span>
+                <span class="check-status-pill neutral" id="status-stt_llm">Idle</span>
+              </div>
+              <div class="check-name">Script Analysis</div>
+              <div class="check-model">Whisper + SLM</div>
+              <div class="check-desc">Scam coercion patterns & urgency markers</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Active Evidence & Reason Codes -->
+        <div class="card reasons-card">
+          <div class="card-header">
+            <h2 class="card-title">Triggered Reasons & Evidence Codes</h2>
+            <span class="card-badge" id="reasons-count-badge">0 Active</span>
+          </div>
+          <div class="reasons-tag-container" id="reasons-container">
+            <span class="empty-placeholder">No threat reasons active in current window.</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Right Column: Alert History & Event Feed -->
+      <section class="grid-col history-col">
+        <!-- Call Summary Box (Shows when call ends) -->
+        <div class="card call-ended-card hidden" id="call-ended-card">
+          <div class="card-header">
+            <h2 class="card-title">Call Concluded Summary (Stage 07)</h2>
+            <span class="badge badge-sealed" id="sealed-record-pill">Sealed Record</span>
+          </div>
+          <div class="ended-grid">
+            <div class="ended-item">
+              <span class="label">Final Verdict</span>
+              <span class="val bold" id="ended-verdict">—</span>
+            </div>
+            <div class="ended-item">
+              <span class="label">Final Risk Level</span>
+              <span class="val bold" id="ended-level">—</span>
+            </div>
+            <div class="ended-item">
+              <span class="label">Final Score</span>
+              <span class="val mono" id="ended-score">—</span>
+            </div>
+            <div class="ended-item">
+              <span class="label">Duration</span>
+              <span class="val mono" id="ended-duration">—</span>
+            </div>
+            <div class="ended-item full-width">
+              <span class="label">Alert Fingerprint (SHA-256)</span>
+              <span class="val mono hash" id="ended-fingerprint">None (No alert triggered)</span>
+            </div>
+            <div class="ended-item full-width">
+              <span class="label">Merkle Root Off-Ledger Anchor</span>
+              <span class="val mono hash" id="ended-merkle">None</span>
+            </div>
+            <div class="ended-item full-width">
+              <span class="label">NCRP / 1930 Sealed Record ID</span>
+              <span class="val mono" id="ended-record-id">None</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Scrollable Feed of Telemetry & Alerts -->
+        <div class="card history-card">
+          <div class="card-header">
+            <div class="history-title-group">
+              <h2 class="card-title">Telemetry & Alert History</h2>
+              <span class="history-count" id="history-item-count">0 items</span>
+            </div>
+            <div class="history-actions">
+              <button class="btn btn-xs btn-outline" id="btn-clear-history">Clear</button>
+            </div>
+          </div>
+
+          <div class="history-list" id="history-feed-list">
+            <div class="history-empty" id="history-empty-msg">
+              <span>Awaiting stream telemetry updates...</span>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="app-footer">
+      <div class="footer-left">
+        <span>SATYACHECK Stage 06 Response Surface · Fallback Dashboard A</span>
+      </div>
+      <div class="footer-right">
+        <span>Out-of-band analysis on audio copy · Zero latency impact on listener</span>
+      </div>
+    </footer>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
