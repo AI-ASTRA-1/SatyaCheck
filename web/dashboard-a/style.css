@@ -552,6 +552,8 @@ body {
 .loop-checkbox-label input {
   cursor: pointer;
   accent-color: var(--accent);
+}
+
 /* ==================== Main Full-Width Layout ==================== */
 .dashboard-main-full {
   display: flex;
