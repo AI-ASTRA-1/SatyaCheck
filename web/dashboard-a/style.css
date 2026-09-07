@@ -3,10 +3,10 @@
 /* ==================== Themes ==================== */
 :root {
   /* Common Fonts & Radius */
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --font-heading: 'Outfit', sans-serif;
+  --font-sans: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-heading: 'Poppins', sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
-  
+
   --radius-sm: 6px;
   --radius-md: 10px;
   --radius-lg: 16px;
@@ -16,84 +16,102 @@
   --transition-normal: all 0.3s ease;
 }
 
-/* Deep Pure Black OLED Dark Theme (Default) */
+/* Brand Dark Theme */
 body.theme-dark {
-  --bg-primary: #000000;
-  --bg-surface: #07070a;
-  --bg-card: #0a0a0f;
-  --bg-card-hover: #121218;
-  --bg-glass: rgba(10, 10, 15, 0.95);
-  
-  --border-subtle: rgba(255, 255, 255, 0.1);
-  --border-strong: rgba(255, 255, 255, 0.18);
-  
-  --text-primary: #f8fafc;
-  --text-secondary: #94a3b8;
-  --text-muted: #64748b;
-  
+  --bg-primary: #0a0a0f;
+  --bg-surface: #14141f;
+  --bg-card: #14141f;
+  --bg-card-hover: #1c1c2e;
+  --bg-glass: rgba(10, 10, 15, 0.97);
+
+  --border-subtle: rgba(201, 247, 111, 0.1);
+  --border-strong: rgba(201, 247, 111, 0.22);
+
+  --text-primary: #f0f4ff;
+  --text-secondary: #a8b4d0;
+  --text-muted: #5e6a80;
+
+  /* Accent */
+  --accent: #c9f76f;
+  --accent-dim: rgba(201, 247, 111, 0.12);
+  --accent-glow: rgba(201, 247, 111, 0.22);
+
+  /* Purple */
+  --purple: #7c3aed;
+  --purple-dim: rgba(124, 58, 237, 0.15);
+
   /* Risk Levels */
-  --risk-low: #10b981;
-  --risk-low-glow: rgba(16, 185, 129, 0.25);
-  --risk-low-bg: rgba(16, 185, 129, 0.12);
-  
+  --risk-low: #c9f76f;
+  --risk-low-glow: rgba(201, 247, 111, 0.25);
+  --risk-low-bg: rgba(201, 247, 111, 0.1);
+
   --risk-medium: #f59e0b;
   --risk-medium-glow: rgba(245, 158, 11, 0.25);
   --risk-medium-bg: rgba(245, 158, 11, 0.12);
-  
+
   --risk-high: #f97316;
   --risk-high-glow: rgba(249, 115, 22, 0.25);
   --risk-high-bg: rgba(249, 115, 22, 0.12);
-  
+
   --risk-critical: #ef4444;
   --risk-critical-glow: rgba(239, 68, 68, 0.3);
   --risk-critical-bg: rgba(239, 68, 68, 0.15);
-  
+
   /* Verdicts */
-  --verdict-genuine: #06b6d4;
+  --verdict-genuine: #c9f76f;
   --verdict-synthetic: #f43f5e;
-  --verdict-unknown: #8b5cf6;
-  
-  --shadow-card: 0 4px 20px rgba(0, 0, 0, 0.8), 0 0 1px 1px var(--border-subtle);
+  --verdict-unknown: #7c3aed;
+
+  --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.85), 0 0 0 1px var(--border-subtle);
 }
 
 /* Bright / Light Theme */
 body.theme-bright {
-  --bg-primary: #f1f5f9;
+  --bg-primary: #f3f4f8;
   --bg-surface: #ffffff;
   --bg-card: #ffffff;
   --bg-card-hover: #f8fafc;
-  --bg-glass: rgba(255, 255, 255, 0.95);
-  
-  --border-subtle: rgba(0, 0, 0, 0.08);
-  --border-strong: rgba(0, 0, 0, 0.16);
-  
-  --text-primary: #0f172a;
-  --text-secondary: #475569;
-  --text-muted: #64748b;
-  
+  --bg-glass: rgba(255, 255, 255, 0.97);
+
+  --border-subtle: rgba(124, 58, 237, 0.12);
+  --border-strong: rgba(124, 58, 237, 0.24);
+
+  --text-primary: #0a0a1a;
+  --text-secondary: #3c3c5a;
+  --text-muted: #6b7280;
+
+  /* Accent */
+  --accent: #5a8a00;
+  --accent-dim: rgba(90, 138, 0, 0.1);
+  --accent-glow: rgba(90, 138, 0, 0.18);
+
+  /* Purple */
+  --purple: #7c3aed;
+  --purple-dim: rgba(124, 58, 237, 0.1);
+
   /* Risk Levels */
-  --risk-low: #059669;
-  --risk-low-glow: rgba(5, 150, 105, 0.18);
-  --risk-low-bg: rgba(5, 150, 105, 0.1);
-  
+  --risk-low: #4a7c00;
+  --risk-low-glow: rgba(74, 124, 0, 0.18);
+  --risk-low-bg: rgba(74, 124, 0, 0.08);
+
   --risk-medium: #d97706;
   --risk-medium-glow: rgba(217, 119, 6, 0.18);
   --risk-medium-bg: rgba(217, 119, 6, 0.1);
-  
+
   --risk-high: #ea580c;
   --risk-high-glow: rgba(234, 88, 12, 0.18);
   --risk-high-bg: rgba(234, 88, 12, 0.1);
-  
+
   --risk-critical: #dc2626;
   --risk-critical-glow: rgba(220, 38, 38, 0.2);
   --risk-critical-bg: rgba(220, 38, 38, 0.12);
-  
+
   /* Verdicts */
-  --verdict-genuine: #0284c7;
+  --verdict-genuine: #4a7c00;
   --verdict-synthetic: #e11d48;
   --verdict-unknown: #7c3aed;
-  
-  --shadow-card: 0 4px 16px rgba(0, 0, 0, 0.06), 0 0 1px 1px var(--border-subtle);
+
+  --shadow-card: 0 4px 16px rgba(0, 0, 0, 0.07), 0 0 0 1px var(--border-subtle);
 }
 
 * {
@@ -153,8 +171,8 @@ body {
   width: 42px;
   height: 42px;
   border-radius: 50%;
-  background: rgba(14, 165, 233, 0.12);
-  border: 1px solid rgba(14, 165, 233, 0.35);
+  background: var(--accent-dim);
+  border: 1px solid var(--border-strong);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -197,15 +215,15 @@ body {
 }
 
 .badge-prototype {
-  background: rgba(14, 165, 233, 0.15);
-  color: #0ea5e9;
-  border: 1px solid rgba(14, 165, 233, 0.3);
+  background: var(--accent-dim);
+  color: var(--accent);
+  border: 1px solid var(--accent-glow);
 }
 
 .badge-sih {
-  background: rgba(168, 85, 247, 0.15);
-  color: #a855f7;
-  border: 1px solid rgba(168, 85, 247, 0.3);
+  background: var(--purple-dim);
+  color: var(--purple);
+  border: 1px solid rgba(124, 58, 237, 0.35);
 }
 
 .header-status-group {
@@ -406,7 +424,7 @@ body {
 }
 
 .pulse-indicator.active {
-  background-color: #0ea5e9;
+  background-color: var(--accent);
 }
 
 .pulse-indicator.alert {
@@ -532,7 +550,7 @@ body {
 
 .loop-checkbox-label input {
   cursor: pointer;
-  accent-color: #0ea5e9;
+  accent-color: var(--accent);
 }
 
 /* ==================== Grid Layout ==================== */
@@ -778,7 +796,7 @@ body {
 
 .progress-bar-fill {
   height: 100%;
-  background: #0ea5e9;
+  background: var(--accent);
   border-radius: var(--radius-full);
   transition: width 0.4s ease;
 }
@@ -807,8 +825,8 @@ body {
 }
 
 .check-item.contributing {
-  border-color: #0ea5e9;
-  background: rgba(14, 165, 233, 0.08);
+  border-color: var(--accent);
+  background: var(--accent-dim);
 }
 
 .check-item.degraded {
@@ -841,9 +859,9 @@ body {
 }
 
 .check-status-pill.contributing {
-  background: rgba(14, 165, 233, 0.15);
-  color: #0ea5e9;
-  border: 1px solid #0ea5e9;
+  background: var(--accent-dim);
+  color: var(--accent);
+  border: 1px solid var(--accent);
 }
 
 .check-status-pill.degraded {
@@ -862,7 +880,7 @@ body {
 .check-model {
   font-family: var(--font-mono);
   font-size: 0.72rem;
-  color: #0ea5e9;
+  color: var(--accent);
 }
 
 .check-desc {
@@ -928,9 +946,9 @@ body {
 }
 
 .badge-sealed {
-  background: rgba(168, 85, 247, 0.15);
-  color: #a855f7;
-  border: 1px solid #a855f7;
+  background: var(--purple-dim);
+  color: var(--purple);
+  border: 1px solid rgba(124, 58, 237, 0.4);
 }
 
 .ended-grid {
@@ -1053,11 +1071,11 @@ body {
 }
 
 .history-entry.kind-session_start {
-  border-left-color: #0ea5e9;
+  border-left-color: var(--accent);
 }
 
 .history-entry.kind-call_ended {
-  border-left-color: #a855f7;
+  border-left-color: var(--purple);
 }
 
 .entry-header {

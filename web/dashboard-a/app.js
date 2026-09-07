@@ -376,7 +376,7 @@
       entry.className = 'history-entry kind-session_start';
       entry.innerHTML = `
         <div class="entry-header">
-          <span class="entry-kind" style="color: #38bdf8;">SESSION START</span>
+          <span class="entry-kind" style="color: var(--accent);">SESSION START</span>
           <span class="entry-time">${timeStr}</span>
         </div>
         <div class="entry-body">
@@ -401,7 +401,7 @@
       entry.className = 'history-entry kind-call_ended';
       entry.innerHTML = `
         <div class="entry-header">
-          <span class="entry-kind" style="color: #c084fc;">CALL CONCLUDED</span>
+          <span class="entry-kind" style="color: var(--purple);">CALL CONCLUDED</span>
           <span class="entry-time">${timeStr}</span>
         </div>
         <div class="entry-body">

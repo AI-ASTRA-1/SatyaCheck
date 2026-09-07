@@ -1,0 +1,214 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SATYACHECK - Real Voice. Real Person. Real-Time Protection.</title>
+  <meta name="description" content="SATYACHECK raises a real-time warning when an AI-cloned voice is detected on a live call. SIH 2026 - Problem Statement SIH26104 - Team AI ASTRA.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="landing.css">
+</head>
+<body>
+  <div class="container">
+    <nav>
+      <a href="landing.html" class="nav-brand">
+        <div class="nav-shield">S</div>
+        <span class="nav-wordmark">SATYA<span>CHECK</span></span>
+      </a>
+      <ul class="nav-links">
+        <li><a href="#problem">Problem</a></li>
+        <li><a href="#how">How It Works</a></li>
+        <li><a href="#architecture">Architecture</a></li>
+        <li><a href="#gap">The Gap</a></li>
+      </ul>
+      <a href="index.html" class="btn-nav">Open Dashboard</a>
+    </nav>
+  </div>
+
+  <div class="container">
+    <section class="hero">
+      <div class="hero-eyebrow">SIH 2026 &middot; SIH26104 &middot; Team AI ASTRA</div>
+      <h1>Real Voice.<br><span class="accent">Real Person.</span><br><span class="purple">Real-Time Protection.</span></h1>
+      <p class="hero-sub">SATYACHECK raises a warning on your screen while a call is live before you act on what you just heard. It analyses audio, not a transcript. The giveaways live in the waveform.</p>
+      <div class="hero-cta-group">
+        <a href="index.html" class="btn-primary">Open Live Dashboard</a>
+        <a href="#how" class="btn-ghost">How it works</a>
+      </div>
+    </section>
+
+    <div class="stat-bar">
+      <div class="stat-item">
+        <span class="stat-value">2.85%</span>
+        <span class="stat-label">Lab EER (ASVspoof 2021 DF)</span>
+        <span class="stat-caveat">Tak et al., Odyssey 2022 - arXiv:2202.12233</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-value">35.24%</span>
+        <span class="stat-label">Real-world EER, 14 languages, 7 platforms</span>
+        <span class="stat-caveat">ML-ITW benchmark - ID not verified, human confirmation pending</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-value">&lt;400ms</span>
+        <span class="stat-label">Spoken word to warning on screen (p90)</span>
+        <span class="stat-caveat">Virtual-number bridge adds ~100-330ms</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="container">
+    <section class="section two-col" id="problem">
+      <div>
+        <span class="section-label">The Problem</span>
+        <h2 class="section-title">30 seconds of audio is enough to clone a voice.</h2>
+        <p class="section-body">Generative AI has made voice cloning accessible to anyone. A scammer who records 30 seconds of a family member's speech can produce a synthetic voice that sounds convincingly real on a phone call. The person being targeted has no way to know.</p>
+        <p class="section-body">Existing call-screening tools work on transcripts and caller ID. Transcripts are useless for detecting a fake voice - the acoustic giveaways are destroyed by speech-to-text. Caller ID is trivially spoofed.</p>
+        <div class="warning-card">
+          <span class="warn-icon">!</span>
+          <p><strong>The generalisation gap is the project.</strong> Lab error rate 2.85% becomes approximately 35.24% on real-world multilingual audio. Phone compression destroys the detail the models rely on. Training through that compression is how we close it.</p>
+        </div>
+      </div>
+      <div class="visual">
+        <div class="call-mock">
+          <div class="call-mock-header">Live Risk Analysis - Call in Progress</div>
+          <div class="call-row"><span class="lbl">Scoring Tick</span><span class="val">#4 / ongoing</span></div>
+          <div class="call-row"><span class="lbl">Machine Fingerprint</span><span class="val danger">fingerprint_synthetic</span></div>
+          <div class="call-row"><span class="lbl">Prosody</span><span class="val danger">prosody_anomaly</span></div>
+          <div class="call-row"><span class="lbl">Script</span><span class="val danger">script_risk_high</span></div>
+          <div class="call-row"><span class="lbl">Verdict</span><span class="val danger">SYNTHETIC - CRITICAL</span></div>
+          <div class="score-ring">
+            <svg width="100" height="100" viewBox="0 0 100 100">
+              <circle cx="50" cy="50" r="35" fill="none" stroke="#1c1c2e" stroke-width="10"/>
+              <circle cx="50" cy="50" r="35" fill="none" stroke="#ef4444" stroke-width="10" stroke-linecap="round"
+                stroke-dasharray="220" stroke-dashoffset="44"
+                transform="rotate(-90 50 50)"/>
+              <text x="50" y="48" text-anchor="middle" dominant-baseline="middle" fill="#f0f4ff" font-family="Poppins,sans-serif" font-size="20" font-weight="800">93</text>
+              <text x="50" y="62" text-anchor="middle" fill="#a8b4d0" font-family="Poppins,sans-serif" font-size="7">Risk Score</text>
+            </svg>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="container">
+    <section class="section" id="how">
+      <span class="section-label">How It Works</span>
+      <h2 class="section-title">Four AI checks. Out-of-band. In parallel.</h2>
+      <p class="section-body">Analysis runs on a copy of the audio stream. The call audio does not pass through any model on its way to the listener. A model failure degrades to no warning, never a dropped or altered call.</p>
+      <div class="checks-grid">
+        <div class="check-card">
+          <div class="check-icon-wrap">W</div>
+          <div class="check-name">Machine Fingerprints</div>
+          <div class="check-model">XLS-R + AASIST-L (~85K params, CPU)</div>
+          <div class="check-desc">Synthesized waveform artifacts and acoustic patterns that exist only in AI-generated speech. Multilingual: Hindi, English, Tamil, Marathi, Bengali and more.</div>
+        </div>
+        <div class="check-card">
+          <div class="check-icon-wrap">P</div>
+          <div class="check-name">Speaker Identity</div>
+          <div class="check-model">ECAPA-TDNN</div>
+          <div class="check-desc">Voiceprint matching. Three outcomes (Round 2): no match, match-synthetic (clone of enrolled person - the dangerous case), match-human. Round 1 returns no_enrolment as a neutral state.</div>
+        </div>
+        <div class="check-card">
+          <div class="check-icon-wrap">R</div>
+          <div class="check-name">Rhythm &amp; Pitch</div>
+          <div class="check-model">openSMILE</div>
+          <div class="check-desc">Prosodic features: jitter, shimmer, pitch contour irregularities. AI voices often show subtle unnaturalness in rhythm and micro-timing.</div>
+        </div>
+        <div class="check-card">
+          <div class="check-icon-wrap">S</div>
+          <div class="check-name">Script Analysis</div>
+          <div class="check-model">Whisper + SLM</div>
+          <div class="check-desc">In-memory transcript - discarded immediately - checked for coercion patterns, urgency language, and known scam structures. Transcript never leaves the check boundary.</div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="container">
+    <section class="section" id="architecture">
+      <span class="section-label">Architecture</span>
+      <h2 class="section-title">Seven stages. Under 400ms to your screen.</h2>
+      <p class="section-body">The pipeline processes audio from call ingestion to on-screen warning in under 400ms p90. A virtual-number bridge adds roughly 100 to 330ms on top.</p>
+      <div class="timeline">
+        <div class="timeline-item">
+          <div class="timeline-stage">Stage 01-02</div>
+          <div class="timeline-label">Call Source &amp; Audio Ingestion</div>
+          <div class="timeline-detail">Exotel primary (call audio streamed to backend while the call continues normally). WebRTC fallback with identical backend. Codec handling: Opus / G.711 / AMR. 20ms frames.</div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-stage">Stage 03</div>
+          <div class="timeline-label">Live Pipeline</div>
+          <div class="timeline-detail">WebSocket, Redis Streams short buffer, silence filtering.</div>
+          <span class="timeline-budget">under 20ms</span>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-stage">Stage 04</div>
+          <div class="timeline-label">Four AI Checks (Parallel, on a Copy)</div>
+          <div class="timeline-detail">Machine fingerprints, speaker identity, prosody, script analysis run simultaneously on a copy of the audio. A straggler is marked FAILED, never a verdict.</div>
+          <span class="timeline-budget">under 180ms</span>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-stage">Stage 05</div>
+          <div class="timeline-label">Risk Fusion</div>
+          <div class="timeline-detail">AI signals combined with number reputation, location, time of day, and call history into a 0-100 score. Score updates roughly once per second. Policy rules are per deployment.</div>
+          <span class="timeline-budget">under 30ms</span>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-stage">Stage 06</div>
+          <div class="timeline-label">Response</div>
+          <div class="timeline-detail">Warning overlay drawn over whatever app is in the foreground. Configurable: SMS, stop payment, force callback, second factor.</div>
+          <span class="timeline-budget">under 50ms</span>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-stage">Stage 07</div>
+          <div class="timeline-label">Evidence</div>
+          <div class="timeline-detail">Alert fingerprint sealed in a Merkle tree. Root published where it cannot be quietly rewritten. No audio, no transcript, no voice data on ledger - only tamper-evidence anchors. Handed to NCRP / 1930 on request.</div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="container">
+    <section class="section" id="gap">
+      <span class="section-label">Why It Matters</span>
+      <h2 class="section-title">The gap is the honest part.</h2>
+      <div class="gap-band">
+        <p class="gap-intro">Lab performance vs. the real world</p>
+        <div class="gap-numbers">
+          <div class="gap-num low">
+            <span class="gval">2.85%</span>
+            <span class="glabel">Lab EER (ASVspoof 2021 DF)</span>
+          </div>
+          <div class="gap-arrow">to</div>
+          <div class="gap-num high">
+            <span class="gval">35.24%</span>
+            <span class="glabel">Real-world EER (14 languages, 7 platforms)</span>
+          </div>
+        </div>
+        <p class="gap-caveat">Real-world figure from ML-ITW benchmark. ID not yet verified - a human confirms on arXiv before this goes on any slide.</p>
+      </div>
+      <p class="section-body" style="margin-top:2rem">Detecting synthetic speech in the real world is an unsolved research problem. We lead with that gap rather than hiding it. Volunteering a weakness with a number is the strongest move available.</p>
+    </section>
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="container">
+    <footer>
+      <p>SATYACHECK &middot; SIH 2026 &middot; Problem Statement SIH26104 &middot; Blockchain &amp; Cybersecurity &middot; Team AI ASTRA</p>
+      <p style="margin-top:0.4rem">Controlled live-warning prototype. Real-world deployment after validation.</p>
+      <p style="margin-top:0.75rem"><a href="index.html">Open Dashboard</a></p>
+    </footer>
+  </div>
+</body>
+</html>
