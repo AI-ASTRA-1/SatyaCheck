@@ -22,11 +22,12 @@ See [roles/R5.md](../../roles/R5.md) for the role specification.
    - Stream metadata tracking (`stream_id`, `call_id`, sequence ticks, timestamps).
 
 2. **Alert History & Evidence Record:**
-   - Chronological scrollable feed of all session events and scoring updates.
-   - Stage 07 call conclusion summary displaying duration, final verdict, final score, `alert_fingerprint` (SHA-256), off-ledger `merkle_root`, and `sealed_record_id`.
+   - Chronological scrollable feed of all session events and scoring updates, including `evidence_refs` tracking.
+   - Stage 07 call conclusion summary displaying duration, final verdict, final score, `alert_fingerprint` (SHA-256), off-ledger `merkle_root`, `root_published_at` timestamp, and `sealed_record_id`.
 
 3. **Connection State & Graceful Degradation:**
    - Handles `session_start`, `risk_update`, and `call_ended` discriminated union messages.
+   - Validates `schema_version` ("1.0") and logs console warnings upon version mismatches.
    - Clear disconnected banner and visual state reset upon disconnect (never freezes on last score).
    - Auto-reconnect polling.
 
@@ -48,10 +49,9 @@ Open `http://127.0.0.1:8080` in any web browser, or open `web/dashboard-a/index.
 
 ---
 
-
 ## Simulated Scenarios
 
-Scenarios are now triggered interactively from the dashboard toolbar (Genuine Call, Voice Clone Attack, Degraded Clone, Stop Stream). Auto-Repeat is off by default; enable it via the checkbox to loop continuously.
+Scenarios are triggered interactively from the dashboard toolbar (Genuine Call, Voice Clone Attack, Degraded Clone, Stop Stream). Auto-Repeat is off by default; enable it via the checkbox to loop continuously.
 
 1. **Scenario 1: Genuine Indian-Accented Call:** Score stays low (`score <= 15`, `fingerprint_genuine`, `prosody_normal`).
 2. **Scenario 2: AI Voice Clone Impersonation Attack:** Early ticks accumulate audio, then score spikes to High/Critical (`score 76-96`, `fingerprint_synthetic`, `prosody_anomaly`, `script_risk_high`) and seals an alert record.
@@ -59,7 +59,12 @@ Scenarios are now triggered interactively from the dashboard toolbar (Genuine Ca
 
 ---
 
-## Contract Verification Tests
+## Contract Verification & Assumptions
+
+- **Check Status Contract Boundary:** The `RiskUpdate` contract provides `contributing_checks` and `degraded_checks`. Unlisted checks are marked as "Idle / Unknown" because the downstream contract does not distinguish between idle, failed, or skipped-for-insufficient-audio states.
+- **Mock Simulator Control Channel:** The scenario toolbar triggers upstream WebSocket action messages (`play`, `stop`, `set_loop`) to `mock_server.py`. This upstream channel is a test harness convenience; the production contract in `contracts/risk.py` is downstream only (backend to app).
+- **Evidence References & Anchors:** `evidence_refs` are displayed in telemetry history feed items; `root_published_at` is shown in the call conclusion card.
+- **Schema Version Verification:** Messages are validated against `schema_version == "1.0"`.
 
 Run the test suite to verify that all emitted messages strictly adhere to `contracts.risk.AppMessage`:
 

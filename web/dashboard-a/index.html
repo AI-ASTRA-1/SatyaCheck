@@ -83,11 +83,11 @@
       </div>
     </div>
 
-    <!-- Interactive Simulation Controls Toolbar -->
+    <!-- Interactive Simulation Controls Toolbar (Mock Server Only) -->
     <div class="controls-toolbar" id="controls-toolbar">
       <div class="controls-title-group">
         <span class="controls-icon">🎮</span>
-        <span class="controls-heading">Call Simulator Controls:</span>
+        <span class="controls-heading">Mock Server Controls (not part of backend contract):</span>
       </div>
       <div class="scenario-btn-group">
         <button id="btn-play-genuine" class="btn btn-scenario btn-scenario-genuine" title="Simulate genuine human call with Indian accent">
@@ -260,6 +260,10 @@
             <div class="ended-item full-width">
               <span class="label">Merkle Root Off-Ledger Anchor</span>
               <span class="val mono hash" id="ended-merkle">None</span>
+            </div>
+            <div class="ended-item full-width">
+              <span class="label">Merkle Root Published At</span>
+              <span class="val mono" id="ended-root-published-at">None</span>
             </div>
             <div class="ended-item full-width">
               <span class="label">NCRP / 1930 Sealed Record ID</span>

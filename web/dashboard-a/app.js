@@ -66,6 +66,7 @@
   const elEndedDuration = document.getElementById('ended-duration');
   const elEndedFingerprint = document.getElementById('ended-fingerprint');
   const elEndedMerkle = document.getElementById('ended-merkle');
+  const elEndedRootPublishedAt = document.getElementById('ended-root-published-at');
   const elEndedRecordId = document.getElementById('ended-record-id');
 
   // History feed
@@ -182,6 +183,11 @@
   function handleAppMessage(msg) {
     if (!msg || !msg.kind) return;
 
+    // Schema version verification (contracts/risk.py specifies SCHEMA_VERSION = "1.0")
+    if (msg.schema_version && msg.schema_version !== '1.0') {
+      console.warn(`[Dashboard A] Schema version mismatch: expected "1.0", received "${msg.schema_version}". Rendering with current schema assumptions.`);
+    }
+
     switch (msg.kind) {
       case 'session_start':
         handleSessionStart(msg);
@@ -268,6 +274,9 @@
     }
 
     elEndedMerkle.textContent = msg.merkle_root || 'None';
+    if (elEndedRootPublishedAt) {
+      elEndedRootPublishedAt.textContent = msg.root_published_at || 'None';
+    }
     elEndedRecordId.textContent = msg.sealed_record_id || 'None';
   }
 
@@ -314,6 +323,8 @@
     }
 
     // 6. 4 AI Checks Status
+    // Note: RiskUpdate contract only transmits contributing_checks and degraded_checks.
+    // Unlisted checks may be idle, failed, or skipped for insufficient audio.
     const contributing = new Set(data.contributing_checks || []);
     const degraded = new Set(data.degraded_checks || []);
 
@@ -325,14 +336,17 @@
         elements.card.className = 'check-item degraded';
         elements.status.className = 'check-status-pill degraded';
         elements.status.textContent = 'Degraded';
+        elements.status.removeAttribute('title');
       } else if (contributing.has(chk)) {
         elements.card.className = 'check-item contributing';
         elements.status.className = 'check-status-pill contributing';
         elements.status.textContent = 'Contributing';
+        elements.status.removeAttribute('title');
       } else {
         elements.card.className = 'check-item';
         elements.status.className = 'check-status-pill neutral';
-        elements.status.textContent = 'Idle';
+        elements.status.textContent = 'Idle / Unknown';
+        elements.status.title = 'Not in contributing or degraded lists (may be idle, failed, or skipped for insufficient audio)';
       }
     });
 
@@ -387,6 +401,11 @@
     } else if (msg.kind === 'risk_update') {
       entry.className = `history-entry level-${msg.risk_level}`;
       const reasonsSnippet = (msg.reasons || []).join(', ') || 'Normal window';
+      const evidenceSnippet = (msg.evidence_refs && msg.evidence_refs.length > 0)
+        ? ` · Refs: ${msg.evidence_refs.join(', ')}`
+        : '';
+      const fullSnippet = reasonsSnippet + evidenceSnippet;
+
       entry.innerHTML = `
         <div class="entry-header">
           <span class="entry-kind">TICK #${msg.sequence} · ${msg.verdict.toUpperCase()}</span>
@@ -394,7 +413,7 @@
         </div>
         <div class="entry-body">
           <span class="entry-score-tag">Score: ${msg.score} [${msg.risk_level.toUpperCase()}]</span>
-          <span class="entry-reasons" title="${reasonsSnippet}">${reasonsSnippet}</span>
+          <span class="entry-reasons" title="${fullSnippet}">${reasonsSnippet}${evidenceSnippet ? `<span class="entry-evidence-refs"> [${msg.evidence_refs.length} refs]</span>` : ''}</span>
         </div>
       `;
     } else if (msg.kind === 'call_ended') {
@@ -446,6 +465,11 @@
     applyTheme(newTheme);
   }
 
+  /**
+   * Mock Simulation Control Channel
+   * Note: The real contracts/risk.py pipeline is strictly one-directional (backend -> app).
+   * This upstream message channel is an interactive demo harness for mock_server.py only.
+   */
   function sendControlMessage(payload) {
     if (socket && socket.readyState === WebSocket.OPEN) {
       socket.send(JSON.stringify(payload));
