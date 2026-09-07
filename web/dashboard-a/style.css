@@ -114,6 +114,152 @@ body.theme-bright {
   --shadow-card: 0 4px 16px rgba(0, 0, 0, 0.07), 0 0 0 1px var(--border-subtle);
 }
 
+/* Bright Mode Component Overrides */
+body.theme-bright .badge-prototype {
+  background: #eaf8df;
+  color: #1b4317;
+  border: 1px solid rgba(74, 124, 0, 0.35);
+}
+
+body.theme-bright .badge-sih {
+  background: #f3e8ff;
+  color: #6b21a8;
+  border: 1px solid rgba(124, 58, 237, 0.35);
+}
+
+body.theme-bright .badge-sealed {
+  background: #f3e8ff;
+  color: #6b21a8;
+  border: 1px solid rgba(124, 58, 237, 0.4);
+}
+
+body.theme-bright .btn-scenario-genuine {
+  background: #eaf8df;
+  color: #14532d;
+  border: 1px solid #86efac;
+}
+
+body.theme-bright .btn-scenario-genuine:hover {
+  background: #dcfce7;
+}
+
+body.theme-bright .btn-scenario-attack {
+  background: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #fca5a5;
+}
+
+body.theme-bright .btn-scenario-attack:hover {
+  background: #fecaca;
+}
+
+body.theme-bright .btn-scenario-degraded {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fcd34d;
+}
+
+body.theme-bright .btn-scenario-degraded:hover {
+  background: #fde68a;
+}
+
+body.theme-bright .btn-scenario-stop {
+  background: #f1f5f9;
+  color: #334155;
+  border: 1px solid #cbd5e1;
+}
+
+body.theme-bright .btn-scenario-stop:hover {
+  background: #e2e8f0;
+  color: #1e293b;
+}
+
+body.theme-bright .verdict-unknown {
+  background: #f3e8ff;
+  color: #6b21a8;
+  border: 1px solid #c084fc;
+}
+
+body.theme-bright .verdict-genuine {
+  background: #dcfce7;
+  color: #166534;
+  border: 1px solid #86efac;
+}
+
+body.theme-bright .verdict-synthetic {
+  background: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #fca5a5;
+}
+
+body.theme-bright .level-low {
+  background: #dcfce7;
+  color: #166534;
+  border: 1px solid #86efac;
+}
+
+body.theme-bright .level-medium {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fcd34d;
+}
+
+body.theme-bright .level-high {
+  background: #ffedd5;
+  color: #9a3412;
+  border: 1px solid #fdba74;
+}
+
+body.theme-bright .level-critical {
+  background: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #fca5a5;
+}
+
+body.theme-bright .check-status-pill.neutral {
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+}
+
+body.theme-bright .check-status-pill.contributing {
+  background: #dcfce7;
+  color: #166534;
+  border: 1px solid #86efac;
+}
+
+body.theme-bright .check-status-pill.degraded {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fcd34d;
+}
+
+body.theme-bright .reason-tag.synthetic-hazard {
+  background: #fee2e2;
+  border-color: #fca5a5;
+  color: #991b1b;
+}
+
+body.theme-bright .reason-tag.genuine-safe {
+  background: #dcfce7;
+  border-color: #86efac;
+  color: #166534;
+}
+
+body.theme-bright .reason-tag.degraded-warn {
+  background: #fef3c7;
+  border-color: #fcd34d;
+  color: #92400e;
+}
+
+body.theme-bright .collapsible-header:hover .card-title {
+  color: #3b5e00;
+}
+
+body.theme-bright .call-ended-card {
+  border: 1px solid rgba(124, 58, 237, 0.35);
+}
+
 * {
   box-sizing: border-box;
   margin: 0;
