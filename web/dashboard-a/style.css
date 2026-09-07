@@ -974,6 +974,15 @@ body {
   transition: transform 0.25s ease;
 }
 
+.collapsible-card.collapsed {
+  height: auto !important;
+  min-height: 0 !important;
+}
+
+.collapsible-card.collapsed .card-header {
+  margin-bottom: 0;
+}
+
 .collapsible-card.collapsed .dropdown-chevron {
   transform: rotate(-90deg);
 }
@@ -1050,7 +1059,6 @@ body {
 .history-card {
   display: flex;
   flex-direction: column;
-  height: 520px;
 }
 
 .history-title-group {
@@ -1065,7 +1073,7 @@ body {
 }
 
 .history-list {
-  flex: 1;
+  max-height: 480px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
