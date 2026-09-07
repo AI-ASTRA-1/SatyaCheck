@@ -37,6 +37,7 @@ module works because this file does not say it is broken. Check the code.
 - Write a number into a doc, README, or slide that no test or logged run produced.
 - Write a claim the deck or the report does not support. See the next section.
 - Hand back a code change with the tests unrun or the docs stale. See Definition of done.
+- Create or edit files outside the folder your operator owns. See `roles/ROLES.md`.
 
 ---
 

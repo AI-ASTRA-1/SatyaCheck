@@ -315,6 +315,13 @@ conversational context, dynamic risk scoring, temporal analysis and intervention
 
 ---
 
+## Roles
+
+Each teammate opens their role file, reads it, and pastes the "Start here" block into
+their coding agent. See [`roles/ROLES.md`](roles/ROLES.md) for the index.
+
+---
+
 ## Documents
 
 | Document | Contents |
