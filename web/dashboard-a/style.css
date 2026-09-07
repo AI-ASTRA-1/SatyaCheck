@@ -280,14 +280,12 @@ body {
   border: 1px solid var(--border-subtle);
 }
 
-.ws-url-box input {
-  background: transparent;
-  border: none;
-  color: var(--text-primary);
+.ws-url-fixed {
+  color: var(--text-secondary);
   font-family: var(--font-mono);
   font-size: 0.78rem;
-  width: 160px;
-  outline: none;
+  padding: 0 0.25rem;
+  user-select: all;
 }
 
 /* ==================== Buttons ==================== */
@@ -1138,10 +1136,6 @@ body {
   }
   
   .ws-url-box {
-    width: 100%;
-  }
-  
-  .ws-url-box input {
     width: 100%;
   }
   

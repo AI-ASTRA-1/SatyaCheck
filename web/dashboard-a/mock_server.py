@@ -22,7 +22,6 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 import websockets
-from websockets.server import WebSocketServerProtocol
 
 from contracts.checks import CheckName, ReasonCode
 from contracts.risk import (
@@ -206,7 +205,7 @@ async def scenario_degraded_clone(stream_id: str, call_id: str) -> AsyncGenerato
     yield end.model_dump_json()
 
 
-async def run_scenario(websocket: WebSocketServerProtocol, scenario_name: str, call_id_num: int) -> None:
+async def run_scenario(websocket, scenario_name: str, call_id_num: int) -> None:
     """Runs a single chosen scenario."""
     if scenario_name == "genuine":
         stream_id = f"st_gen_{call_id_num}"
@@ -235,7 +234,7 @@ async def run_scenario(websocket: WebSocketServerProtocol, scenario_name: str, c
             await websocket.send(msg)
 
 
-async def handler(websocket: WebSocketServerProtocol) -> None:
+async def handler(websocket) -> None:
     """Client connection handler with interactive scenario triggering."""
     print(f"[WS] Client connected: {websocket.remote_address}")
     call_counter = 1

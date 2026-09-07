@@ -16,7 +16,6 @@
   const elThemeLabel = document.getElementById('theme-label');
   const elConnDot = document.getElementById('connection-dot');
   const elConnText = document.getElementById('connection-text');
-  const elWsInput = document.getElementById('ws-url-input');
   const elBtnReconnect = document.getElementById('btn-reconnect');
   const elBanner = document.getElementById('disconnected-banner');
   const elBtnRetry = document.getElementById('btn-banner-retry');
@@ -113,7 +112,7 @@
       }
     }
 
-    const wsUrl = elWsInput.value.trim() || 'ws://127.0.0.1:8765';
+    const wsUrl = 'ws://127.0.0.1:8765';
     setConnectionState('connecting');
 
     try {

@@ -48,9 +48,10 @@ Open `http://127.0.0.1:8080` in any web browser, or open `web/dashboard-a/index.
 
 ---
 
+
 ## Simulated Scenarios
 
-The mock server loops through three realistic call scenarios:
+Scenarios are now triggered interactively from the dashboard toolbar (Genuine Call, Voice Clone Attack, Degraded Clone, Stop Stream). Auto-Repeat is off by default; enable it via the checkbox to loop continuously.
 
 1. **Scenario 1: Genuine Indian-Accented Call:** Score stays low (`score <= 15`, `fingerprint_genuine`, `prosody_normal`).
 2. **Scenario 2: AI Voice Clone Impersonation Attack:** Early ticks accumulate audio, then score spikes to High/Critical (`score 76-96`, `fingerprint_synthetic`, `prosody_anomaly`, `script_risk_high`) and seals an alert record.
@@ -65,3 +66,9 @@ Run the test suite to verify that all emitted messages strictly adhere to `contr
 ```bash
 python -m pytest web/dashboard-a/test_mock_server.py -q
 ```
+
+---
+
+## Beyond the R5 spec
+
+The scenario-trigger toolbar (Genuine / Attack / Degraded / Stop, with auto-loop toggle) and the light/dark theme switch are extras added for demo convenience; the literal R5.md spec requires only a live risk view and a scrollable alert history.
