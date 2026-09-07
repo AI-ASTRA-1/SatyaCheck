@@ -3,6 +3,14 @@
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
+import sys
+
+# Ensure repo root is on sys.path
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
 from pydantic import TypeAdapter
 
 from contracts.risk import AppMessage, CallEnded, RiskLevel, RiskUpdate, SessionStart
