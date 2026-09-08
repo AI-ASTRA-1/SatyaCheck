@@ -10,7 +10,7 @@ is a stub, and what the environment can currently do.
 | `checks/machine_fingerprint/` | Check layer plus two scorers: `SslAasistScorer` (XLS-R + AASIST, the architecture the deck describes, default) and `AasistScorer` (AASIST alone, CPU comparison). Runs end to end through `ml/tools/score_file.py`. Neither pretrained checkpoint discriminates on our audio yet; see Findings. |
 | `checks/speaker_identity/` | Docstring only. Probed but not built: `ml/tools/speaker_probe.py` measures ECAPA-TDNN cosine similarity, and the answer was that it does not separate our clone from its target. See Findings before spending effort here. |
 | `checks/prosody/` | Docstring only. |
-| `checks/stt_llm/` | Round 2 spike, evidence channel wired end to end. `check.py` is `SttLlmCheck` (implements `contracts.checks.Check`): transcribe the batch, run `analyze()`, emit `SttLlmSignal(script_risk, script_category)`; short window or thin transcript is SKIPPED, a transcriber error is FAILED with no signal. The transcript is a local var in `run()`, discarded on return. `asr.py` is the `Transcriber` seam plus `FasterWhisperTranscriber` (faster-whisper small, English pinned, greedy, VAD on, `condition_on_previous_text` off; loads on CUDA float16 or CPU int8, local weights only). `llm.py` is the `ScriptLLM` seam, system prompt and defensive JSON parser feeding an llm-to-rules-to-none chain that never raises and never guesses mid-range. `tactics.py` is the rules scorer (stdlib only): five tactic scores plus an `intent` in [0, 1] with a refusal/disclaimer strip for Exotel's mixed mono stream. On the 20 hand-written transcripts in `eval_transcripts.py`, rules `intent` separates cleanly: scam 0.83 to 1.00, ordinary 0.00 to 0.33 (n=20, one author, English only). The evidence threshold (0.5) is provisional and uncalibrated. `ml/tools/transcribe_file.py` runs a wav through the check window by window. ASR survives G.711 and AMR-NB but not the 8 kb/s mp3 export, and the English language pin breaks on the non-English real calls; see Findings. Tests: `test_stt_llm_script.py`, `test_stt_llm_llm.py`, `test_stt_llm_check.py`. Not built: the rolling transcript buffer (stage 03, R2's folder) and the concrete local LLM client. |
+| `checks/stt_llm/` | Round 2 spike, evidence channel wired end to end. `check.py` is `SttLlmCheck` (implements `contracts.checks.Check`): transcribe the batch, run `analyze()`, emit `SttLlmSignal(script_risk, script_category)`; short window or thin transcript is SKIPPED, a transcriber error is FAILED with no signal. The transcript is a local var in `run()`, discarded on return. `asr.py` is the `Transcriber` seam plus `FasterWhisperTranscriber` (faster-whisper small, English pinned, greedy, VAD on, `condition_on_previous_text` off; loads on CUDA float16 or CPU int8, local weights only). `llm.py` is the `ScriptLLM` seam, system prompt and defensive JSON parser feeding an `analyze()` chain (LLMs in order, then rules, then none) that never raises and never guesses mid-range. Three `ScriptLLM` back ends ship: `AnthropicScriptLLM` (`claude-sonnet-5`), `GroqScriptLLM` (OpenAI-compatible, default `openai/gpt-oss-120b`), and `QwenScriptLLM` (local `qwen2.5-3b-instruct`). `default_chain()` is `[anthropic, qwen]`. **The Anthropic and Groq back ends send the transcript to an external API**, which contradicts the deck's "all inference is local, no external API to fail on demo day" and touches the DPDP/privacy section. Those are human-owned docs and are not edited here; the divergence is recorded so it is not lost. The comparison (see Findings) shows a strong external model beats the rules scorer by ~0.25 separation and local Qwen-3B is worse than rules. `tactics.py` is the rules scorer (stdlib only): five tactic scores plus an `intent` in [0, 1] with a refusal/disclaimer strip for Exotel's mixed mono stream. On the 20 hand-written transcripts in `eval_transcripts.py`, rules `intent` separates cleanly: scam 0.83 to 1.00, ordinary 0.00 to 0.33 (n=20, one author, English only). The evidence threshold (0.5) is provisional and uncalibrated. `ml/tools/transcribe_file.py` runs a wav through the check window by window; `ml/tools/compare_script_llms.py` scores the eval set through each back end (paid for the Claude configs). ASR survives G.711 and AMR-NB but not the 8 kb/s mp3 export, and the English language pin breaks on the non-English real calls; see Findings. Tests: `test_stt_llm_script.py`, `test_stt_llm_llm.py`, `test_stt_llm_check.py`. Not built: the rolling transcript buffer (stage 03, R2's folder). |
 | `runner/` | Docstring only. Owned by R2, not R1. |
 | `augment/` | Built and tested: G.711 mu-law/A-law in numpy, AMR-NB and Opus via ffmpeg, random gain, dynamic range compression, noise at controlled SNR. |
 | `train/` | Built and tested: ASVspoof 2019 LA dataset with the phone channel applied per epoch, fine-tuning loop, EER. |
@@ -510,6 +510,67 @@ carries over to stt_llm unchanged.
    calls. Not a WER measurement and not a benchmark; the thresholds are
    provisional.
 
+### Script-channel LLM comparison, 2026-09-08
+
+`ml/tools/compare_script_llms.py` over the 20 hand-written transcripts (10 scam,
+10 ordinary). `separation` is `min(scam intent) - max(ordinary intent)`; higher
+is a cleaner classifier.
+
+| Back end | scam range | ordinary range | separation | notes |
+|---|---|---|---|---|
+| rules (`analyze_rules`) | 0.83-1.00 | 0.00-0.33 | **+0.50** | local, instant, deck-compliant; the working path |
+| local `qwen2.5-3b-instruct` | 1.00-1.00 | 0.00-**0.90** | **+0.10** | worse than rules; over-fires on genuine-urgent; ~11 s/call |
+| Groq `openai/gpt-oss-120b` | 0.95-1.00 | 0.00-0.20 | **+0.75** | best measured; external API |
+| Groq `qwen/qwen3.8-27b` | 1.00-1.00 | 0.00-0.30 | **+0.70** | external API |
+| `claude-sonnet-5` | - | - | - | unmeasured; account has no credit |
+
+**A strong external model is the only thing that beats the rules scorer.**
+gpt-oss-120b and qwen3.8-27b both keep the two hardest genuine cases (a relative
+genuinely asking to transfer money; a real bank call that says "we will never ask
+for your OTP") below the scam band, which is exactly where local Qwen-3B failed
+(scored them 0.70 and 0.80). Qwen-3B is a **downgrade** from the rules scorer it
+would sit above - slower and noisier. `QwenScriptLLM` stays in the code but the
+recommendation on the numbers is to drop it from the chain.
+
+**The external win does not come for free.** Groq's free tier rate-limits after
+~8 rapid calls (`429`), so a call every ~12 s across users is not viable on it,
+and it carries no data-processing agreement. `claude-sonnet-5` was attempted with
+a valid key and returned `400: credit balance is too low` on every request. So
+the measured options are: rules (local, +0.50) now, or a paid/self-hosted strong
+model (+0.7-0.75) if the deck's local-only claim and the DPDP section are
+rewritten by a human.
+
+Two parser fixes came out of this run: `_grounded_quotes` now strips the quote
+marks models wrap fragments in before checking the transcript, and the
+fabrication gate only discards a response when `intent >= 0.5` (a benign low
+score is not worth losing over quote formatting). `GroqScriptLLM` retries `429`
+with backoff. n=20, one author, English only.
+
+**Schema conformance checked.** `RESPONSE_SCHEMA` in `llm.py` is the single wire
+contract; the SYSTEM prompt's JSON block is an instance of it (test-enforced),
+`schema_errors()` reports departures, and `ScriptAnalysis.__post_init__` refuses
+to build a malformed result at any construction site. `compare_script_llms
+--schema-check` over the 20 transcripts: `gpt-oss-120b` 20/20, `qwen3.8-27b`
+20/20, local `qwen2.5-3b` 20/20 raw responses conform. The Groq back end passes
+the schema on the wire as `response_format: json_schema` (json_object fallback
+for models without it); the Anthropic back end passes it as `output_config.format`.
+
+### Whisper transcribes the phone channel but not the 8 kb/s export, 2026-09-08
+
+Re-confirmed with `transcribe_file --show-transcript` on the real recordings:
+
+| Audio | Transcript |
+|---|---|
+| clean 16 kHz studio English (`spk_01_source`) | verbatim |
+| through **G.711 8 kHz** (the Exotel live-stream channel) | verbatim, indistinguishable from clean |
+| through AMR-NB | verbatim |
+| real Exotel calls (`exotel_call_1/2`, 8 kb/s mp3 export, non-English) | unusable: repetition loops, invented names |
+
+So for the production path (G.711 stream, decoded straight to PCM) Whisper's
+transcript is fine. The 8 kb/s recording export is not a valid input for this
+check any more than for the voice model, and non-English calls hit the English
+pin and produce noise the `looks_like_asr_noise` guard abstains on.
+
 ### No simulable channel degradation reproduces the failure, 2026-09-08
 
 Individual effects had each been ruled out separately, which leaves the possibility
@@ -885,6 +946,7 @@ Downloaded 2026-09-07, sizes measured on disk:
 | AASIST and AASIST-L (clovaai) | `aasist/` | 1.7 MB, weights plus model code | machine_fingerprint back end | yes, pure PyTorch |
 | ECAPA-TDNN (SpeechBrain) | `spkrec-ecapa-voxceleb/` | 85 MB | speaker_identity | yes |
 | faster-whisper small | `faster-whisper-small/` | 464 MB | stt_llm, local STT only | yes |
+| Qwen2.5-3B-Instruct | `qwen2.5-3b-instruct/` | 6.2 GB fp16 | stt_llm local LLM fallback | yes, through transformers |
 | wav2vec2 XLS-R 300m (fairseq) | `fairseq/xlsr2_300m.pt` | 3632 MB | Tak et al. reproduction only | **no** |
 | SSL-AASIST fine-tuned, LA-trained | `Best_LA_model_for_DF.pth` | 1213 MB | Tak et al. reproduction only | **no** |
 
@@ -904,8 +966,12 @@ nothing about completeness; the leftover `.aria2` control file was the real sign
 Verify an archive by opening it, not by measuring it.
 
 openSMILE needs no download; it ships its feature-set configs with the package.
-The scam-script LLM is deliberately not chosen yet, because stt_llm is priority 5
-and a Round 1 evidence channel only.
+The scam-script LLM is not settled. Three `ScriptLLM` back ends exist
+(`AnthropicScriptLLM`, `GroqScriptLLM`, `QwenScriptLLM`); the comparison in
+Findings shows a strong external model (`gpt-oss-120b`, `qwen3.8-27b`) beats the
+rules scorer and local Qwen-3B is worse than it. The working path is still rules,
+which is local and deck-compliant; any external model is a human decision on the
+deck and DPDP text.
 
 ### Two paths for the machine fingerprint check, on purpose
 
@@ -960,6 +1026,7 @@ therefore use `codec_name` and `CodecName`, never `codec` and `Codec`.
 | Installed | pydantic, pytest, ruff, mypy, numpy 2.5.3, torch 2.11.0+cu128, torchaudio 2.11.0+cu128, transformers, soundfile 0.14.0, speechbrain 1.1.1 |
 | Added 2026-09-08 | speechbrain 1.1.1 for ECAPA-TDNN, plus hyperpyyaml, joblib, scipy, sentencepiece, requests, ruamel-yaml, cloudpickle |
 | Added 2026-09-08 (stt_llm) | faster-whisper 1.2.1 for local STT, with ctranslate2 4.8.2, av 18.1.0, onnxruntime 1.29.0, flatbuffers, protobuf. Owner-approved; also added to the `ml` extra in `pyproject.toml` |
+| Added 2026-09-08 (stt_llm LLM) | anthropic 1.4.0 (with truststore 0.10.4, httpx2, jiter); accelerate 1.14.0 and bitsandbytes 0.50.2 for local Qwen. In the `ml` extra. `GroqScriptLLM` uses `httpx2` directly (transitive via anthropic) against Groq's OpenAI-compatible endpoint, key from `GROQ_API_KEY`. `truststore.inject_into_ssl()` is needed for HF / Anthropic / Groq TLS on this machine (same interception as `--system-certs`). |
 | FLAC decoding | `soundfile`, not torchaudio. torchaudio 2.11 delegates decoding to `torchcodec`, which is a heavier dependency than reading a FLAC warrants |
 | CUDA | available, `torch.cuda.is_available()` is True and reports the 4070 |
 | `uv` | 0.12.10 at `%USERPROFILE%\.local\bin\uv.exe`. README repo state says 0.12.1 |

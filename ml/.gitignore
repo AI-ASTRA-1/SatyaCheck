@@ -35,3 +35,10 @@ checkpoints/
 *.bin
 *.onnx
 *.safetensors
+
+# python bytecode (the root .gitignore that should cover this is untracked; see
+# QUESTIONS.md). This closes it for ml/ on this machine.
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/

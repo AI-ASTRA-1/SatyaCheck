@@ -148,6 +148,12 @@ class ScriptAnalysis:
     ``tactics`` and any quoted text never cross the ``SttLlmSignal`` boundary. The
     check maps ``intent`` -> ``script_risk`` and ``script_category()`` ->
     ``script_category``, and drops the rest.
+
+    ``__post_init__`` enforces the output schema at every construction site
+    (``parse_llm_json``, ``analyze_rules``, ``_empty``): tactics keys are exactly
+    ``TACTICS``, every score and ``intent`` / ``confidence`` is a real number in
+    [0, 1], and ``source`` is one of the three literals. A violation is a bug
+    upstream, so it raises rather than passes a malformed result to fusion.
     """
 
     tactics: dict[str, float]
@@ -155,6 +161,20 @@ class ScriptAnalysis:
     confidence: float
     source: Source
     mixed_channel: bool = True
+
+    def __post_init__(self) -> None:
+        if set(self.tactics) != set(TACTICS):
+            raise ValueError(f"tactics keys {sorted(self.tactics)} != {sorted(TACTICS)}")
+        for name, score in self.tactics.items():
+            if not _is_unit(score):
+                raise ValueError(f"tactics[{name!r}] = {score!r} not in [0, 1]")
+        for field_name in ("intent", "confidence"):
+            if not _is_unit(getattr(self, field_name)):
+                raise ValueError(f"{field_name} = {getattr(self, field_name)!r} not in [0, 1]")
+        if self.source not in ("llm", "rules", "none"):
+            raise ValueError(f"source = {self.source!r} not one of llm/rules/none")
+        if not isinstance(self.mixed_channel, bool):
+            raise TypeError(f"mixed_channel = {self.mixed_channel!r} is not a bool")
 
     def top_tactics(self, n: int = 2) -> list[tuple[str, float]]:
         ranked = sorted(self.tactics.items(), key=lambda kv: kv[1], reverse=True)
@@ -171,6 +191,11 @@ class ScriptAnalysis:
 
 def _clamp(x: float) -> float:
     return max(0.0, min(1.0, float(x)))
+
+
+def _is_unit(x: object) -> bool:
+    """True for a real number (not bool) in the closed unit interval."""
+    return not isinstance(x, bool) and isinstance(x, (int, float)) and 0.0 <= x <= 1.0
 
 
 def _empty(mixed_channel: bool) -> ScriptAnalysis:

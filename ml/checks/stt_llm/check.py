@@ -17,6 +17,7 @@ CheckStatus.SKIPPED. The check records its own latency_ms; the runner owns the
 from __future__ import annotations
 
 import time
+from collections.abc import Sequence
 from datetime import UTC, datetime
 
 from contracts.checks import (
@@ -52,7 +53,7 @@ class SttLlmCheck:
     def __init__(
         self,
         transcriber: Transcriber | None = None,
-        llm: ScriptLLM | None = None,
+        llm: ScriptLLM | Sequence[ScriptLLM] | None = None,
         *,
         min_window_ms: int = DEFAULT_MIN_WINDOW_MS,
         evidence_threshold: float = DEFAULT_EVIDENCE_THRESHOLD,

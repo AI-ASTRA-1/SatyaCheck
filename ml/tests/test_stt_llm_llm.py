@@ -11,7 +11,14 @@ import dataclasses
 import json
 
 from ml.checks.stt_llm.eval_transcripts import NORMAL_TRANSCRIPTS, SCAM_TRANSCRIPTS
-from ml.checks.stt_llm.llm import SYSTEM, analyze, parse_llm_json
+from ml.checks.stt_llm.llm import (
+    SYSTEM,
+    AnthropicScriptLLM,
+    QwenScriptLLM,
+    analyze,
+    default_chain,
+    parse_llm_json,
+)
 from ml.checks.stt_llm.tactics import TACTICS, ScriptAnalysis, analyze_rules
 
 # A scam transcript the rules scorer scores high, used to check the fallback path
@@ -115,12 +122,21 @@ def test_boolean_intent_is_rejected() -> None:
     assert parse_llm_json(json.dumps(_payload(intent=True)), SCAM) is None
 
 
-def test_all_evidence_hallucinated_is_discarded() -> None:
+def test_all_evidence_hallucinated_is_discarded_when_intent_is_high() -> None:
     resp = json.dumps(
         _payload(intent=0.9, evidence=["a fragment that appears nowhere in the call"])
     )
     a = analyze(SCAM, _FixedLLM(resp))
     assert a.source == "rules"
+
+
+def test_hallucinated_evidence_is_tolerated_when_intent_is_low() -> None:
+    # a benign response is not worth discarding over quote formatting
+    resp = json.dumps(
+        _payload(intent=0.1, evidence=["a fragment that appears nowhere in the call"])
+    )
+    a = parse_llm_json(resp, SCAM)
+    assert a is not None and a.source == "llm" and a.intent == 0.1
 
 
 def test_partially_grounded_evidence_is_accepted() -> None:
@@ -178,3 +194,59 @@ def test_asr_noise_skips_the_model_and_abstains() -> None:
     assert llm.calls == 0
     assert a.source == "none"
     assert a.intent == 0.0
+
+
+def _good(intent: float = 0.6) -> _FixedLLM:
+    return _FixedLLM(json.dumps(_payload(intent=intent)))
+
+
+def test_chain_falls_through_a_raising_model() -> None:
+    good = _good(0.7)
+    a = analyze(SCAM, [_RaisingLLM(), good])
+    assert a.source == "llm"
+    assert a.intent == 0.7
+    assert good.calls == 1
+
+
+def test_chain_falls_through_an_untrusted_parse() -> None:
+    good = _good(0.65)
+    a = analyze(SCAM, [_FixedLLM("{ not json"), good])
+    assert a.source == "llm"
+    assert a.intent == 0.65
+
+
+def test_chain_exhausted_falls_to_rules() -> None:
+    a = analyze(SCAM, [_RaisingLLM(), _FixedLLM("{ not json")])
+    assert a.source == "rules"
+    assert a.intent == analyze_rules(SCAM).intent
+
+
+def test_chain_stops_at_the_first_trusted_result() -> None:
+    first, second = _good(0.8), _good(0.2)
+    a = analyze(SCAM, [first, second])
+    assert a.intent == 0.8
+    assert first.calls == 1
+    assert second.calls == 0
+
+
+def test_single_llm_and_one_element_list_agree() -> None:
+    resp = _good(0.55)
+    single = analyze(SCAM, resp)
+    resp.calls = 0
+    listed = analyze(SCAM, [resp])
+    assert single == listed
+
+
+def test_asr_noise_skips_every_model_in_a_chain() -> None:
+    a, b = _good(0.9), _good(0.9)
+    result = analyze("hello " * 20, [a, b])
+    assert result.source == "none"
+    assert a.calls == 0 and b.calls == 0
+
+
+def test_default_chain_shape() -> None:
+    chain = default_chain()
+    assert [type(m) for m in chain] == [AnthropicScriptLLM, QwenScriptLLM]
+    # constructed lazily; no client or weights touched here
+    assert chain[0].model_name == "anthropic-claude-sonnet-5"
+    assert chain[1].model_name == "qwen2.5-3b-instruct"

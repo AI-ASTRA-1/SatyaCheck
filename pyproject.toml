@@ -14,6 +14,9 @@ ml = [
     "transformers",
     "onnxruntime",
     "faster-whisper",
+    "anthropic",
+    "accelerate",
+    "bitsandbytes",
 ]
 runtime = [
     "fastapi",
