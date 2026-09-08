@@ -234,6 +234,24 @@ class SslAasistScorer:
         self._ensure_loaded()
         self.score(b"\x00\x00" * SSL_INPUT_SAMPLES, 16000)
 
+    def embed(self, pcm_s16le: bytes, sample_rate: int) -> np.ndarray:
+        """Mean-pooled XLS-R features for one window, 1024 dimensions.
+
+        Read-only, and deliberately not part of `SyntheticScorer`. It exists for the
+        confidence estimator, which needs to ask how far a window sits from the data
+        the model was fine-tuned on. Uses the identical preprocessing `score` uses,
+        so a distance and a score always describe the same window.
+        """
+        self._ensure_loaded()
+        torch = self._torch
+
+        samples = np.frombuffer(pcm_s16le, dtype="<i2").astype(np.float32) / 32768.0
+        padded = _tile_pad(samples, SSL_INPUT_SAMPLES)
+        tensor = torch.from_numpy(padded).unsqueeze(0).to(self._device)
+        with torch.no_grad():
+            features = self._model.ssl_model.extract_feat(tensor)
+        return features.mean(dim=1).squeeze(0).cpu().numpy().astype(np.float32)
+
     def score(self, pcm_s16le: bytes, sample_rate: int) -> float:
         """Probability in [0, 1] that this window is machine generated."""
         if sample_rate != 16000:

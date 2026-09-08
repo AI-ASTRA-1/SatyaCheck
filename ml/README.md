@@ -7,6 +7,7 @@ is a stub, and what the environment can currently do.
 
 | Component | State |
 |---|---|
+| `checks/machine_fingerprint/api.py` | **The handoff surface.** `score_window(pcm_16k) -> {p_synthetic, confidence, vad_status}`. One function, three fields, no NaN. |
 | `checks/machine_fingerprint/` | Check layer plus two scorers: `SslAasistScorer` (XLS-R + AASIST, the architecture the deck describes, default) and `AasistScorer` (AASIST alone, CPU comparison). Runs end to end through `ml/tools/score_file.py`. Neither pretrained checkpoint discriminates on our audio yet; see Findings. |
 | `checks/speaker_identity/` | Docstring only. Probed but not built: `ml/tools/speaker_probe.py` measures ECAPA-TDNN cosine similarity, and the answer was that it does not separate our clone from its target. See Findings before spending effort here. |
 | `checks/prosody/` | Docstring only. |
@@ -24,6 +25,8 @@ is a stub, and what the environment can currently do.
 | `tools/gate.py` | Applies the five H+4 rules in order and prints the result, with the saturation diagnostic that stops Rule 4 being read as Rule 3. |
 | `eval/align.py` | Envelope cross-correlation, for locating a known clip inside a recording of it. |
 | `eval/gate.py` | The five rules and `headroom_traversed`. |
+| `eval/confidence.py` | k-NN distance from the in-domain reference, calibrated to 0 to 1. |
+| `tools/fit_confidence.py` | Fits the reference and measures how well it works. |
 | `eval/transplant.py` | `separation`, `gap`, and what each means at small n. |
 | `TRANSPLANT_CAPTURE.md` | The capture procedure, the five controls, and how to read the result. |
 | `eval/probes.py` | Seeded non-speech generators: white noise, pink noise, a synthesised chord bed, near-silence. Plus evenly spaced segment sampling. |
@@ -409,6 +412,42 @@ gate now falls back to a quarter hop and then to the single most speech-active
 window, and reports how it got there; a score that cannot be produced is `None` with
 `vad_status FAIL` and a reason, never nan. See "Which 4 s window you score decides
 the answer" below, because fixing it turned up something larger.
+
+### The confidence estimator, and what it can and cannot do, 2026-09-08
+
+Branch B's deliverable, and the thing that makes it honest: when audio is far from
+what the checkpoint was fine-tuned on, report **low confidence** rather than a
+confident wrong answer.
+
+`ml/eval/confidence.py` embeds a window with XLS-R, takes the mean distance to its 5
+nearest neighbours among 60 in-domain ASVspoof clips, and calibrates that against the
+distances the reference set produces among itself. Fit and evaluation use disjoint
+halves of the eval split.
+
+| group | n | model wrong on | confidence, mean | range |
+|---|---|---|---|---|
+| held-out ASVspoof | 60 | 0 | **0.498** | 0.017 to 1.000 |
+| IFD | 10 | 3 | 0.015 | 0.000 to 0.083 |
+| our own recordings | 6 | 4 | 0.008 | 0.000 to 0.033 |
+| replayed, iPhone | 10 | 5 | 0.018 | 0.000 to 0.083 |
+| replayed, Samsung | 10 | 4 | 0.062 | 0.000 to 0.300 |
+
+**AUC 0.951** separating out-of-domain from in-domain, which is what it measures.
+**AUC 0.822** predicting a wrong answer, which is what you might want. The second is
+lower because an out-of-domain clip the model happens to get right also earns low
+confidence, and that is correct behaviour rather than a miss.
+
+**It is a graded hint for the risk engine, never a gate.** Nothing should raise or
+suppress a warning on confidence alone.
+
+**Three metrics that failed, recorded so they are not tried again.** The Branch B
+plan named "distance from the ASVspoof feature-mean in XLS-R embedding space", and
+that specific metric **does not work**: per-dimension z-distance to the mean put our
+own recordings (0.738 to 1.217) inside the ASVspoof range (0.896 to 1.303).
+PCA-Mahalanobis at 20 components left 56% of out-of-domain clips inside the in-domain
+range. Cosine distance to the mean left 100% inside, so it is worse than nothing.
+k-nearest-neighbours was the only one of the four with usable signal, and the
+calibration against reference self-distances is what sharpens it.
 
 ### The channel does not move genuine into spoof. It moves everything to 1.0, 2026-09-08
 
