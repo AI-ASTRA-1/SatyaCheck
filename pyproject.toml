@@ -31,6 +31,11 @@ ml = [
     # machine, and a local keyword scorer takes over when it is unavailable.
     "faster-whisper",
     "groq",
+    # This machine sits behind TLS interception, so certifi-based clients cannot
+    # verify the re-signed certificates. truststore uses the OS trust store,
+    # which is what lets HuggingFace fetch the Whisper weights and Groq accept a
+    # connection at all. Harmless where there is no interception.
+    "truststore",
 ]
 runtime = [
     "fastapi",

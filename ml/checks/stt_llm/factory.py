@@ -32,8 +32,44 @@ from .transcriber import FasterWhisperTranscriber
 logger = logging.getLogger("satyacheck.stt_llm.factory")
 
 
-def build_default_scorer(*, groq_model: str = "llama-3.3-70b-versatile") -> ScriptScorer:
-    """Groq in front of the local keyword scorer, or the keyword scorer alone."""
+#: Used when neither the caller nor GROQ_MODEL says otherwise. Verified against
+#: this account on 2026-09-09: it answered 0.95/authority_impersonation on a scam
+#: script and 0.0/none on ordinary speech, in about 0.8 s.
+#: `qwen/qwen3.8-27b` gave the same answers in about 0.35 s if latency matters.
+#: `openai/gpt-oss-20b` returns empty content on some inputs, so avoid it.
+DEFAULT_GROQ_MODEL = "openai/gpt-oss-120b"
+
+
+def enable_system_certs() -> None:
+    """Verify TLS against the OS trust store instead of certifi's bundle.
+
+    This machine sits behind TLS interception: the proxy re-signs every
+    connection with a CA that is in the Windows store but not in certifi, so
+    certifi-based clients fail. It broke the HuggingFace download of the Whisper
+    weights ("CERTIFICATE_VERIFY_FAILED") and every Groq call
+    ("APIConnectionError") until this was in place.
+
+    `truststore` reads the platform store, so it fixes both without anyone
+    hand-building a PEM or setting SSL_CERT_FILE. Idempotent and safe on a
+    machine with no interception, where it simply uses the normal system roots.
+    """
+    try:
+        import truststore
+
+        truststore.inject_into_ssl()
+    except Exception as exc:  # noqa: BLE001 - a machine without interception needs nothing
+        logger.debug("could not enable system certificate verification: %s", exc)
+
+
+def build_default_scorer(*, groq_model: str | None = None) -> ScriptScorer:
+    """Groq in front of the local keyword scorer, or the keyword scorer alone.
+
+    `groq_model` falls back to the GROQ_MODEL environment variable, then to
+    DEFAULT_GROQ_MODEL, so the model can be changed from .env without a code
+    change.
+    """
+    groq_model = groq_model or os.environ.get("GROQ_MODEL") or DEFAULT_GROQ_MODEL
+    enable_system_certs()
     fallback = KeywordScriptScorer()
     if not os.environ.get("GROQ_API_KEY"):
         logger.warning(
@@ -62,7 +98,7 @@ def build_default_check(
     model_size: str = "small",
     device: str | None = None,
     language: str | None = None,
-    groq_model: str = "llama-3.3-70b-versatile",
+    groq_model: str | None = None,
     warmup: bool = True,
 ) -> SttLlmCheck:
     """The check the transcript worker should use, configured for this machine.
@@ -74,6 +110,8 @@ def build_default_check(
     The returned check is already warmed, because a cold first transcript costs
     seconds on top of a step that is already the slow one.
     """
+    # Before the transcriber, which downloads weights over TLS on first use.
+    enable_system_certs()
     transcriber = FasterWhisperTranscriber(
         model_size=model_size, device=device, language=language
     )

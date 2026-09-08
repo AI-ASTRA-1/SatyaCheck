@@ -269,11 +269,15 @@ constants, because AGENTS.md makes policy per deployment.
 
 Three rules go with the weights:
 
-- **The score renormalises over the checks that actually reported.** With a
-  plain weighted sum, a missing script signal would score a call at 15% of the
-  fingerprint and every transcript outage would read as a low-risk call. A
-  failed check must not look like a safe one, so the remaining weights are
-  rescaled and the update carries the missing check in `degraded_checks`.
+- **A missing script signal is scored two ways, and which one depends on
+  whether check 4 has ever answered for that stream.** Before its first answer
+  the call is not scoreable yet: the plain weighted sum applies, the fingerprint
+  contributes at most its own 0.15, the score stays in the LOW band, and no
+  warning is raised on a call nothing has judged. After its first answer, a
+  later absence is a failure: the score renormalises onto the fingerprint alone,
+  because a broken check must not make a call look safe. Both mark the update
+  degraded. The wait is bounded by `WARMUP_GRACE_TICKS` (20, roughly 20 s), so a
+  check 4 that never answers at all cannot silence warnings for a whole call.
 - **The transcript never touches `verdict`.** `RiskVerdict` answers "is this
   voice synthetic", and words cannot establish that. A human reading a scam
   script is a high score with verdict GENUINE; a clone discussing the weather is

@@ -20,10 +20,15 @@ is a real voice and a high risk, which comes out here as a high score with
 verdict GENUINE. Letting a transcript declare a voice synthetic would make the
 field mean nothing.
 
-When the script signal is missing or stale, the score renormalises onto the
-fingerprint alone rather than multiplying it by 0.15. A failed check must not
-look like a safe call. The update is marked degraded so the absence is visible
-rather than inferred.
+**3. A missing script signal is scored two different ways, on purpose.** Before
+check 4 has ever answered for a stream, the call is not scoreable yet: the plain
+weighted sum applies, the fingerprint contributes at most its own 0.15, and the
+score stays inside the LOW band, so no warning is raised on a call that nothing
+has judged. Once check 4 has answered at least once, a later absence is a real
+failure, and the score renormalises onto the fingerprint alone rather than
+multiplying it by 0.15, because a broken check must not make a call look safe.
+
+Both cases mark the update degraded, so neither is silent.
 """
 
 from __future__ import annotations
@@ -53,6 +58,17 @@ FINGERPRINT_WEIGHT = 0.15
 
 #: The fingerprint probability at or above which the voice is called synthetic.
 VERDICT_THRESHOLD = 0.5
+
+#: How many scoring ticks a stream waits for check 4's first answer before
+#: giving up on it. Ticks are roughly one per second, and the transcript worker
+#: needs a few seconds of buffer plus a pass, so this is generous.
+#:
+#: It is bounded on purpose. Suppressing warnings until check 4 reports is
+#: correct while it is starting up, and catastrophic if it never reports at all:
+#: a stream whose check 4 is broken or absent would never warn about anything.
+#: After the grace period the stream is treated as having lost the check, which
+#: renormalises onto the fingerprint and can warn again.
+WARMUP_GRACE_TICKS = 20
 
 
 @dataclass(frozen=True)
@@ -142,6 +158,10 @@ def _band_for(score: int, mapping: dict[int, RiskLevel]) -> RiskLevel:
 class _StreamFusionState:
     ema_score: float = 0.0
     ticks_seen: int = 0
+    #: Has check 4 ever produced a signal for this stream? Distinguishes "not
+    #: ready yet", early in a call, from "was working and has now failed". The
+    #: two must not score the same way. See `update`.
+    script_has_reported: bool = False
 
 
 class RiskFusionEngine:
@@ -154,7 +174,9 @@ class RiskFusionEngine:
         band_mapping: dict[int, RiskLevel] | None = None,
         script_weight: float = SCRIPT_WEIGHT,
         fingerprint_weight: float = FINGERPRINT_WEIGHT,
+        warmup_grace_ticks: int = WARMUP_GRACE_TICKS,
     ) -> None:
+        self._warmup_grace_ticks = warmup_grace_ticks
         self._ema_alpha = ema_alpha
         self._high_severity_override = high_severity_override
         self._band_mapping = band_mapping if band_mapping is not None else DEFAULT_BAND_MAPPING
@@ -166,20 +188,46 @@ class RiskFusionEngine:
         script = _script_reading(results)
         fingerprint = _fingerprint_reading(results)
 
-        # Renormalising over the checks that actually reported matters more than
-        # the weights themselves. A plain weighted sum would score a call at 15%
-        # of the fingerprint whenever the script signal is missing, so every
-        # transcript outage would read as a low-risk call.
+        state = self._state.setdefault(results.stream_id, _StreamFusionState())
+        if script.contributed:
+            state.script_has_reported = True
+
+        # How a missing script signal is scored depends on whether check 4 has
+        # ever answered for this stream, and the difference is the whole point:
+        #
+        # - Never answered (the first seconds of a call, while the transcript
+        #   worker fills its buffer): the call is not scoreable yet. Keep the
+        #   plain weighted sum, so the fingerprint contributes at most its own
+        #   0.15 and the score stays inside the LOW band. No warning is raised
+        #   on a call nothing has actually judged.
+        # - Answered before and now missing (stale, failed, API down): a real
+        #   failure. Renormalise onto the fingerprint alone, because a broken
+        #   check must not make a call look safe.
+        #
+        # Both are marked degraded, so neither is silent.
+        #
+        # The wait is bounded by WARMUP_GRACE_TICKS. A check 4 that never
+        # answers, because it failed to build or crashes on every pass, would
+        # otherwise suppress every warning for the whole call.
+        warming_up = (
+            not state.script_has_reported
+            and script.value is None
+            and state.ticks_seen < self._warmup_grace_ticks
+        )
+
         parts: list[tuple[float, float]] = []
         if script.value is not None:
             parts.append((self._script_weight, script.value))
         if fingerprint.value is not None:
             parts.append((self._fingerprint_weight, fingerprint.value))
-        if parts:
+
+        if not parts:
+            raw_score = 0
+        elif warming_up:
+            raw_score = round(sum(w * v for w, v in parts) * 100)
+        else:
             total_weight = sum(w for w, _ in parts)
             raw_score = round(sum(w * v for w, v in parts) / total_weight * 100)
-        else:
-            raw_score = 0
 
         verdict = _verdict_for(fingerprint)
         reasons = [*script.reasons, *fingerprint.reasons]
@@ -196,7 +244,6 @@ class RiskFusionEngine:
         if context_reason is not None:
             reasons = [*reasons, context_reason]
 
-        state = self._state.setdefault(results.stream_id, _StreamFusionState())
         state.ticks_seen += 1
         if adjusted_score >= self._high_severity_override:
             state.ema_score = float(adjusted_score)

@@ -30,6 +30,29 @@ from ml.runner.runner import DefaultCheckRunner
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
 logger = logging.getLogger("satyacheck.session")
 
+
+def _load_dotenv() -> None:
+    """Read .env into the environment before anything reads a key out of it.
+
+    Must run before `_build_transcript_worker()` below, because check 4's scorer
+    is chosen at startup on whether GROQ_API_KEY is set. Loading it later would
+    leave the backend on the keyword scorer for the whole run with a valid key
+    sitting in the file.
+
+    `python-dotenv` arrives with uvicorn[standard]. Missing .env is normal and
+    silent: the keyword scorer needs no key.
+    """
+    try:
+        from dotenv import load_dotenv
+    except ImportError:
+        return
+    # override=False so a real environment variable always beats the file.
+    if load_dotenv(override=False):
+        logger.info("loaded .env")
+
+
+_load_dotenv()
+
 # Log every Nth received chunk instead of every one, to keep the console readable
 # at 50 chunks/window while still proving frames are arriving.
 _CHUNK_LOG_STRIDE = 10

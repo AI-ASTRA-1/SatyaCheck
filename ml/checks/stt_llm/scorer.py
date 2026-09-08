@@ -178,7 +178,7 @@ class GroqScriptScorer:
 
     def __init__(
         self,
-        model: str = "llama-3.3-70b-versatile",
+        model: str = "openai/gpt-oss-120b",
         api_key: str | None = None,
         timeout_s: float = 8.0,
     ) -> None:
@@ -191,16 +191,35 @@ class GroqScriptScorer:
         self._model = model
         self.name = f"groq:{model}"
 
+    # Deliberately not using response_format={"type": "json_object"}. Several
+    # Groq-hosted models reject it outright ("Failed to validate JSON"), so the
+    # prompt asks for JSON and `_extract_json` reads it back leniently. That
+    # works across every model on the platform, which matters because the model
+    # is configurable through GROQ_MODEL.
     _PROMPT = (
         "You judge whether a phone call transcript follows a known scam script. "
-        "Indian fraud context. Reply with JSON only, no prose, exactly: "
-        '{"script_risk": <float 0.0-1.0>, "category": "<one of '
-        + "|".join([*CATEGORIES, CATEGORY_NONE])
-        + '>"}. '
-        "script_risk is how strongly the words match a scam script, where 0.0 is "
-        "ordinary conversation and 1.0 is an unmistakable script. Judge the words "
-        "only. You are not told, and must not guess, whether the voice is real."
+        "Indian fraud context. Reply with JSON and nothing else, in this exact "
+        'shape: {"script_risk": 0.0, "category": "none"} where script_risk is '
+        "0.0 to 1.0 and category is one of "
+        + ", ".join([*CATEGORIES, CATEGORY_NONE])
+        + ". script_risk is how strongly the words match a scam script, where 0.0 "
+        "is ordinary conversation and 1.0 is an unmistakable script. Judge the "
+        "words only. You are not told, and must not guess, whether the voice is real."
     )
+
+    @staticmethod
+    def _extract_json(text: str) -> dict:
+        """First JSON object in the reply.
+
+        Reasoning models prepend commentary or return an empty content field, so
+        an empty or unparseable reply raises and the caller falls back to the
+        local scorer. Never returns a neutral score of its own: a silent 0.0 is
+        indistinguishable from a genuinely clean call.
+        """
+        match = re.search(r"\{.*?\}", text, re.DOTALL)
+        if match is None:
+            raise ValueError("no JSON object in the model reply")
+        return json.loads(match.group(0))
 
     def score(self, transcript: str) -> ScriptAssessment:
         if not transcript.strip():
@@ -213,10 +232,15 @@ class GroqScriptScorer:
                 {"role": "user", "content": transcript},
             ],
             temperature=0.0,
-            max_tokens=100,
-            response_format={"type": "json_object"},
+            # Generous on purpose. The default model is a reasoning model, and
+            # its chain of thought is billed against this budget before any
+            # content is emitted. At 200 the reply came back truncated mid-JSON
+            # with finish_reason "length" on exactly the inputs that needed the
+            # most thought, so every real scam script fell through to the local
+            # scorer while ordinary speech scored fine.
+            max_tokens=1024,
         )
-        payload = json.loads(completion.choices[0].message.content or "{}")
+        payload = self._extract_json(completion.choices[0].message.content or "")
         risk = float(payload.get("script_risk", 0.0))
         if not 0.0 <= risk <= 1.0:
             raise ValueError(f"groq returned script_risk out of range: {risk}")
