@@ -42,6 +42,8 @@ class CallState:
         self.callee_ws: Optional[Any] = None
         self.offer_sdp = offer_sdp
         self.answered = False
+        self.pending_ice_for_callee: list[dict] = []
+        self.pending_ice_for_caller: list[dict] = []
 
 
 class SignallingServer:
@@ -102,6 +104,10 @@ class SignallingServer:
                 logger.info(
                     "Call %s: sent incoming_call to callee", call.call_id,
                 )
+                for cand in call.pending_ice_for_callee:
+                    await self._send_json(client, cand)
+                    logger.info("Call %s: flushed buffered ICE candidate to callee", call.call_id)
+                call.pending_ice_for_callee.clear()
                 break
 
     # -- message handlers ----------------------------------------------------
@@ -163,15 +169,32 @@ class SignallingServer:
         })
         logger.info("Call %s: accepted, answer forwarded to caller", call.call_id)
 
+        # Flush any pending ICE candidates from callee to caller
+        for cand in call.pending_ice_for_caller:
+            await self._send_json(call.caller_ws, cand)
+            logger.info("Call %s: flushed buffered ICE candidate to caller", call.call_id)
+        call.pending_ice_for_caller.clear()
+
     async def _handle_ice(self, ws: Any, data: dict) -> None:
+        call = self._active_call
+        if call is None:
+            return
         peer = self._get_peer(ws)
         if peer is None:
+            if ws is call.caller_ws:
+                call.pending_ice_for_callee.append(data)
+                logger.info("Call %s: buffered ICE candidate for callee", call.call_id)
+            elif ws is call.callee_ws:
+                call.pending_ice_for_caller.append(data)
+                logger.info("Call %s: buffered ICE candidate for caller", call.call_id)
             return
+
         await self._send_json(peer, {
             "type": "ice",
             "call_id": data.get("call_id", ""),
             "candidate": data.get("candidate"),
         })
+        logger.info("Call %s: forwarded ICE candidate to peer", call.call_id)
 
     async def _handle_hangup(self, ws: Any, data: dict) -> None:
         call = self._active_call
