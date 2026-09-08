@@ -285,3 +285,41 @@ class TestSubjectSelection:
         five = [0.5] * len(transplant.ALL_SUBJECTS)
         assert not overlap_is_meaningful(one, one)
         assert overlap_is_meaningful(five, five)
+
+
+class TestFindCapture:
+    """Recorders do not write wav. iOS Voice Memos writes .m4a."""
+
+    def test_a_wav_is_found(self, tmp_path: Path) -> None:
+        (tmp_path / "pc_bonafide_phone.wav").write_bytes(b"")
+        found = transplant.find_capture(tmp_path, "pc_bonafide_phone")
+        assert found is not None and found.suffix == ".wav"
+
+    @pytest.mark.parametrize("extension", [".m4a", ".mp3", ".3gp", ".flac", ".opus"])
+    def test_other_containers_are_found_too(
+        self, tmp_path: Path, extension: str
+    ) -> None:
+        # Hardcoding .wav reported every cell MISSING for a correctly recorded
+        # session, which is the worst kind of failure: it looks like no data.
+        (tmp_path / f"pc_bonafide_phone{extension}").write_bytes(b"")
+        found = transplant.find_capture(tmp_path, "pc_bonafide_phone")
+        assert found is not None and found.suffix == extension
+
+    def test_wav_wins_when_several_exist(self, tmp_path: Path) -> None:
+        for extension in (".m4a", ".wav", ".mp3"):
+            (tmp_path / f"pc_bonafide_phone{extension}").write_bytes(b"")
+        found = transplant.find_capture(tmp_path, "pc_bonafide_phone")
+        assert found is not None and found.suffix == ".wav"
+
+    def test_nothing_there_returns_none(self, tmp_path: Path) -> None:
+        assert transplant.find_capture(tmp_path, "pc_bonafide_phone") is None
+
+    def test_a_different_name_is_not_matched(self, tmp_path: Path) -> None:
+        (tmp_path / "pc_deepfake_phone.m4a").write_bytes(b"")
+        assert transplant.find_capture(tmp_path, "pc_bonafide_phone") is None
+
+    def test_the_conditions_file_is_never_mistaken_for_audio(
+        self, tmp_path: Path
+    ) -> None:
+        (tmp_path / transplant.CONDITIONS_FILE).write_text("{}", encoding="utf-8")
+        assert transplant.find_capture(tmp_path, "capture_conditions") is None

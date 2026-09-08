@@ -89,6 +89,39 @@ Practical notes:
 - Use a **plain voice recorder**, never a call app's recorder. Path B has to be the
   microphone alone, or path B and path C become the same measurement.
 - Mark the phone's position with tape so it cannot drift over ten takes.
+- Airplane mode, so a notification cannot land in the middle of a take.
+
+### On an iPhone, use Voice Memos with two settings changed
+
+Voice Memos is the right recorder, and the iPhone is the right device: of the
+recordings this model fails on, the two highest-scoring genuine ones
+(`spk_03_source` 0.922 and `spk_03b_source` 0.920) carry Apple `Core Media Audio`
+metadata. `spk_02_source` at 0.678 is a Samsung capture and `spk_01_source` at 0.436
+has had its metadata stripped. Device is confounded with speaker across those four,
+so this is not evidence that the iPhone is worse. It does mean the iPhone is the
+device behind the clearest failures, which is the one to transplant.
+
+Two settings:
+
+1. **Settings, Voice Memos, Audio Quality, set to Lossless.** The default is
+   Compressed, roughly 32 kb/s AAC. `ml/README.md` records that AAC at 64 and 128
+   kb/s is not a cue, but it also records a cliff below 32 kb/s on mp3 where genuine
+   speech goes to 0.999. Recording at the default would put an untested codec into
+   the one experiment built to isolate the channel. Lossless removes it entirely.
+2. **Enhance Recording off.** It is a per-recording toggle in the Voice Memos edit
+   view. It applies noise reduction and EQ, which is exactly the class of processing
+   the diagnosis forbids: modern enhancers resynthesise speech and leave the
+   over-smoothed envelopes this detector reads as synthetic.
+
+Leave everything else alone. Automatic gain on the iPhone's own capture path cannot
+be turned off, and should not be: it is part of what the transplant is measuring.
+The requirement is that it is *constant*, which it is as long as nothing moves.
+
+Voice Memos writes `.m4a`. That is fine, the tool takes any container ffmpeg reads.
+
+**One device is not a finding.** `ml/README.md` already says so about the device
+processing hypothesis. If a second handset is available, two clips on it afterwards
+cost five minutes and are worth a great deal.
 - **Turn nothing on to "improve" the audio.** No noise suppression toggle, no voice
   isolation, no enhancement. If the handset applies it anyway that is part of what we
   are measuring, but nothing should be enabled deliberately.
@@ -109,9 +142,10 @@ Ten files, path B only. Path C is derived from these in software, see below. If 
 real Exotel capture ever becomes possible it goes in as `<name>_exotel.wav`, and the
 tool prefers it over the simulation automatically.
 
-Any format ffmpeg can read. They are canonicalised to 16 kHz mono s16le by the same
-decode every other row in the diagnosis goes through, so no conversion is needed
-first.
+Any container ffmpeg can read: `.wav`, `.m4a`, `.mp3`, `.3gp`, `.flac` and more.
+The extension does not matter, only the stem. They are canonicalised to 16 kHz mono
+s16le by the same decode every other row in the diagnosis goes through, so no
+conversion is needed first.
 
 ## Path C, and why it is simulated
 

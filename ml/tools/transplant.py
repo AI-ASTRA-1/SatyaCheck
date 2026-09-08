@@ -101,6 +101,22 @@ def conditions_note(conditions: dict[str, str]) -> str:
     return "; ".join(f"{key}={value}" for key, value in conditions.items())
 
 
+#: Extensions a capture may arrive as, in preference order. Recorders do not all
+#: write wav: iOS Voice Memos writes .m4a, Android writes .m4a or .3gp, and the
+#: decode is the same for every one of them. Hardcoding .wav here would have
+#: reported every cell as MISSING for a session that was recorded correctly.
+CAPTURE_EXTENSIONS = (".wav", ".m4a", ".mp4", ".mp3", ".flac", ".aac", ".3gp", ".ogg", ".opus")
+
+
+def find_capture(directory: Path, name: str) -> Path | None:
+    """The capture file for `name`, whatever container it arrived in."""
+    for extension in CAPTURE_EXTENSIONS:
+        candidate = directory / f"{name}{extension}"
+        if candidate.exists():
+            return candidate
+    return None
+
+
 def simulated_exotel(phone_audio: np.ndarray) -> np.ndarray:
     """The live telephony leg, applied in software to a path B recording.
 
@@ -148,23 +164,23 @@ def score_cells(
             for path_id, (suffix, channel) in PATHS.items():
                 name = f"{subject}_{klass}{suffix}"
                 directory = source_dir if path_id == "A" else capture_dir
-                source = directory / f"{name}.wav"
+                source = find_capture(directory, name)
 
                 simulated = False
-                if path_id == "C" and simulate_exotel and not source.exists():
-                    phone = capture_dir / f"{subject}_{klass}_phone.wav"
-                    if not phone.exists():
+                if path_id == "C" and simulate_exotel and source is None:
+                    phone = find_capture(capture_dir, f"{subject}_{klass}_phone")
+                    if phone is None:
                         missing.append(
-                            f"C/{subject}/{klass} cannot be simulated, "
-                            f"path B missing at {phone}"
+                            f"C/{subject}/{klass} cannot be simulated, path B "
+                            f"missing at {capture_dir / (subject + '_' + klass + '_phone.*')}"
                         )
                         print(f"  {name:<26} MISSING (no path B)", file=sys.stderr)
                         continue
                     audio = simulated_exotel(load(phone, cache))
                     channel = SIMULATED_EXOTEL_CHANNEL
                     simulated = True
-                elif not source.exists():
-                    missing.append(f"{path_id}/{subject}/{klass} at {source}")
+                elif source is None:
+                    missing.append(f"{path_id}/{subject}/{klass} at {directory / name}.*")
                     print(f"  {name:<26} MISSING", file=sys.stderr)
                     continue
                 else:
@@ -336,8 +352,13 @@ def main(argv: list[str] | None = None) -> int:
     fields = collect()
     commit = fields["frozen_commit"]
 
-    has_captures = any(args.capture_dir.glob("*_phone.wav")) or any(
-        args.capture_dir.glob("*_exotel.wav")
+    # any() over the matched paths themselves. Wrapping the glob calls in any()
+    # instead would test the generator objects, which are always truthy.
+    has_captures = any(
+        match
+        for path in ("phone", "exotel")
+        for extension in CAPTURE_EXTENSIONS
+        for match in args.capture_dir.glob(f"*_{path}{extension}")
     )
     conditions = load_conditions(args.capture_dir) if has_captures else None
 
