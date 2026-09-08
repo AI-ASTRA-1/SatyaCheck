@@ -173,6 +173,17 @@ prosody (openSMILE), stt_llm (speech-to-text then language model).
 CheckStatus: ok, degraded (ran with caveats), failed (model error, treated as no
 signal, never a verdict), skipped (not enough audio yet).
 
+**Check 4 (stt_llm) does not run inside the 180 ms stage 04 budget.** Decided
+2026-09-09. Transcription plus a language model takes seconds, so running it in
+`DefaultCheckRunner` would mark it FAILED on every window. Instead
+`backend/app/pipeline/transcript_worker.py` keeps a rolling 10 s buffer per
+stream, runs the check every 3 s in its own task, and caches the newest
+CheckResult. Stage 04 still returns stt_llm as SKIPPED; the orchestrator
+overlays the cached result before calling fusion, and only when it is fresher
+than 15 s. Consequences: the script signal describes the last ~10 s rather than
+the current window, and a stale or missing one is reported rather than assumed
+(see 3.5).
+
 ReasonCode: the stable, non-PII reason strings the risk engine folds into the score
 (fingerprint_synthetic, fingerprint_genuine, voiceprint_no_enrolment,
 voiceprint_no_match, voiceprint_match, voiceprint_match_synthetic, prosody_anomaly,
@@ -245,6 +256,36 @@ alert was raised), merkle_root, sealed_record_id, root_published_at,
 schema_version.
 
 AppMessage is the discriminated union over the three, on `kind`.
+
+### 3.6 How the score combines the checks (stage 05)
+
+Set 2026-09-09. `backend/app/fusion/fusion.py` holds both numbers as named
+constants, because AGENTS.md makes policy per deployment.
+
+| Check | Weight in the 0 to 100 score |
+|---|---|
+| stt_llm (script_risk) | 0.85 |
+| machine_fingerprint (synthetic_probability) | 0.15 |
+
+Three rules go with the weights:
+
+- **The score renormalises over the checks that actually reported.** With a
+  plain weighted sum, a missing script signal would score a call at 15% of the
+  fingerprint and every transcript outage would read as a low-risk call. A
+  failed check must not look like a safe one, so the remaining weights are
+  rescaled and the update carries the missing check in `degraded_checks`.
+- **The transcript never touches `verdict`.** `RiskVerdict` answers "is this
+  voice synthetic", and words cannot establish that. A human reading a scam
+  script is a high score with verdict GENUINE; a clone discussing the weather is
+  a low score with verdict SYNTHETIC. Both are correct and both are useful.
+- **The EMA still applies.** Fusion does not trigger on a single tick, so a
+  score reaches its weighted value across several ticks rather than instantly.
+
+Measured on 2026-09-09, 207 s of genuine Indian-accented speech through the full
+pipeline: 326 of 326 windows scored LOW (score 15). The same audio path before
+check 4 existed scored 42 of 43 windows CRITICAL/synthetic, because the
+fingerprint is out of domain on real phone audio and converges toward 1.0
+regardless of whether the speech is genuine.
 
 ## 4. The 180 ms check budget
 

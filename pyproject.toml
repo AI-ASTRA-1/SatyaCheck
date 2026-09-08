@@ -25,6 +25,12 @@ ml = [
     "sentencepiece",
     "joblib",
     "scipy",
+    # Check 4 (stt_llm). faster-whisper transcribes locally on the GPU; groq
+    # scores the scam script over the API. The Groq path is a deliberate
+    # prototype decision taken 2026-09-09: it sends transcript text off this
+    # machine, and a local keyword scorer takes over when it is unavailable.
+    "faster-whisper",
+    "groq",
 ]
 runtime = [
     "fastapi",

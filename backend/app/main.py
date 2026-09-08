@@ -15,8 +15,12 @@ from fastapi import FastAPI, WebSocket
 from backend.app.fusion.fusion import RiskFusionEngine
 from backend.app.ingestion.websocket_endpoint import run_audio_ingestion
 from backend.app.pipeline.buffer import BufferTick, InProcessStreamBuffer
+from backend.app.pipeline.transcript_worker import (
+    DEFAULT_MAX_SIGNAL_AGE_S,
+    TranscriptWorker,
+)
 from backend.app.response.dispatcher import ResponseDispatcher
-from contracts.checks import ReasonCode
+from contracts.checks import CheckName, ReasonCode
 from contracts.context import CallContext
 from contracts.pipeline import CanonicalAudioChunk
 from contracts.risk import CallEnded, RiskLevel, RiskUpdate, RiskVerdict, SessionStart
@@ -39,10 +43,16 @@ class CallSessionOrchestrator:
         runner: DefaultCheckRunner | None = None,
         fusion: RiskFusionEngine | None = None,
         dispatcher: ResponseDispatcher | None = None,
+        transcripts: TranscriptWorker | None = None,
+        max_script_age_s: float = DEFAULT_MAX_SIGNAL_AGE_S,
     ) -> None:
         self.runner = runner if runner is not None else DefaultCheckRunner()
         self.fusion = fusion if fusion is not None else RiskFusionEngine()
         self.dispatcher = dispatcher if dispatcher is not None else ResponseDispatcher()
+        # Check 4 runs out of band, so it is not in `runner`. None means the
+        # backend runs without it and fusion reports the script signal absent.
+        self.transcripts = transcripts if transcripts is not None else TranscriptWorker()
+        self._max_script_age_s = max_script_age_s
         self._buffers: dict[str, InProcessStreamBuffer] = {}
         self._contexts: dict[str, CallContext] = {}
         self._chunk_counts: dict[str, int] = {}
@@ -55,6 +65,7 @@ class CallSessionOrchestrator:
             stream_id=stream_id, call_id=call_id, started_at=started_at
         )
         self._chunk_counts[stream_id] = 0
+        self.transcripts.start_stream(stream_id, call_id, self._contexts[stream_id])
         await self.dispatcher.send(
             stream_id,
             SessionStart(stream_id=stream_id, call_id=call_id, started_at=started_at),
@@ -66,6 +77,9 @@ class CallSessionOrchestrator:
             return
         count = self._chunk_counts.get(chunk.stream_id, 0) + 1
         self._chunk_counts[chunk.stream_id] = count
+        # Feed the out-of-band transcript buffer. Never awaits work: it appends
+        # to a bounded deque, so ingestion is not slowed by check 4.
+        self.transcripts.add_chunk(chunk)
         if count % _CHUNK_LOG_STRIDE == 0:
             logger.info(
                 "audio received: stream_id=%s frames_so_far=%d last_sequence=%d bytes=%d",
@@ -93,6 +107,11 @@ class CallSessionOrchestrator:
             tick = buffer.flush()
             if tick is not None:
                 await self._process_tick(stream_id, tick)
+
+        # After the final flush, for the same reason the buffer is flushed before
+        # the context is popped: stopping the worker first would drop the script
+        # signal from the last window.
+        await self.transcripts.stop_stream(stream_id)
 
         context = self._contexts.pop(stream_id, None)
         self._chunk_counts.pop(stream_id, None)
@@ -142,16 +161,39 @@ class CallSessionOrchestrator:
         if context is None:
             return
         results = await self.runner.run_checks(tick.batch, context)
+        script_age = self._overlay_script_result(stream_id, results)
         update = self.fusion.update(results, context)
         self._last_update[stream_id] = update
         logger.info(
-            "processed by backend: stream_id=%s score=%d risk_level=%s verdict=%s",
+            "processed by backend: stream_id=%s score=%d risk_level=%s verdict=%s "
+            "script_age=%s degraded=%s",
             stream_id,
             update.score,
             update.risk_level.value,
             update.verdict.value,
+            "none" if script_age is None else f"{script_age:.1f}s",
+            [c.value for c in update.degraded_checks],
         )
         await self.dispatcher.send(stream_id, update)
+
+    def _overlay_script_result(self, stream_id: str, results) -> float | None:
+        """Put the newest fresh check 4 result into this tick's batch result.
+
+        Check 4 does not run in stage 04, so `run_checks` returns it SKIPPED.
+        Replacing that entry with the cached one is what lets fusion read both
+        checks through the same `ChecksBatchResult` it already takes, with no
+        extra parameter and no special case in the scoring path.
+
+        A cached result older than `max_script_age_s` is not overlaid at all, so
+        fusion sees the check as absent and renormalises rather than scoring on
+        a stale judgement.
+        """
+        cached = self.transcripts.get_fresh(stream_id, self._max_script_age_s)
+        if cached is None:
+            return None
+        results.results = [r for r in results.results if r.check != CheckName.STT_LLM]
+        results.results.append(cached.result)
+        return cached.age_s()
 
 
 app = FastAPI(title="SATYACHECK backend prototype")
@@ -185,7 +227,32 @@ def _build_runner() -> DefaultCheckRunner:
     return DefaultCheckRunner(checks=[build_default_check()])
 
 
-orchestrator = CallSessionOrchestrator(runner=_build_runner())
+def _build_transcript_worker() -> TranscriptWorker:
+    """Check 4's out-of-band worker, with the real check when it can be built.
+
+    Unlike the fingerprint factory this never refuses: check 4 runs outside the
+    180 ms budget, so a slow build is late rather than fatal. Any failure here
+    (no torch, no Whisper weights, no network for the first download) leaves the
+    worker disabled, and fusion then reports the script signal absent and marks
+    the update degraded rather than pretending the call was judged.
+    """
+    try:
+        from ml.checks.stt_llm import build_default_check as build_stt_check
+
+        return TranscriptWorker(build_stt_check())
+    except Exception as exc:  # noqa: BLE001 - check 4 is never worth failing startup for
+        logger.warning(
+            "check 4 (stt_llm) is disabled: %s: %s. Risk scores will come from "
+            "the fingerprint alone and every update will be marked degraded.",
+            type(exc).__name__,
+            exc,
+        )
+        return TranscriptWorker()
+
+
+orchestrator = CallSessionOrchestrator(
+    runner=_build_runner(), transcripts=_build_transcript_worker()
+)
 
 
 @app.websocket("/ws/audio/{stream_id}/{call_id}")

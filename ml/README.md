@@ -11,7 +11,7 @@ is a stub, and what the environment can currently do.
 | `checks/machine_fingerprint/` | Check layer plus two scorers: `SslAasistScorer` (XLS-R + AASIST, the architecture the deck describes, default) and `AasistScorer` (AASIST alone, CPU comparison). Runs end to end through `ml/tools/score_file.py`. Neither pretrained checkpoint discriminates on our audio yet; see Findings. |
 | `checks/speaker_identity/` | Docstring only. Probed but not built: `ml/tools/speaker_probe.py` measures ECAPA-TDNN cosine similarity, and the answer was that it does not separate our clone from its target. See Findings before spending effort here. |
 | `checks/prosody/` | Docstring only. |
-| `checks/stt_llm/` | Docstring only. |
+| `checks/stt_llm/` | **Built 2026-09-09.** Check layer plus two halves: `FasterWhisperTranscriber` (faster-whisper small, GPU, ~0.3 s per 10 s window) and a `ScriptScorer`, either `GroqScriptScorer` (API, primary when `GROQ_API_KEY` is set) or `KeywordScriptScorer` (local fallback). Runs out of band via `backend/app/pipeline/transcript_worker.py`, not inside the 180 ms stage 04 budget. The transcript is discarded on return and never reaches evidence. |
 | `runner/` | Docstring only. Owned by R2, not R1. |
 | `augment/` | Built and tested: G.711 mu-law/A-law in numpy, AMR-NB and Opus via ffmpeg, random gain, dynamic range compression, noise at controlled SNR. |
 | `train/` | Built and tested: ASVspoof 2019 LA dataset with the phone channel applied per epoch, fine-tuning loop, EER. |
