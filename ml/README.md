@@ -17,6 +17,9 @@ is a stub, and what the environment can currently do.
 | `eval/` | Built and tested: EER, DET curve, normalised cost-weighted DCF with deployment presets. |
 | calibration | Not started. |
 | `tools/frozen_config.py` | Reads the frozen diagnosis config out of the running code. `FROZEN.md` at the repo root is transcribed from it, and `tests/test_frozen_config.py` fails if the two drift apart. |
+| `tools/baseline.py` | Scores every clip we have into `data/results/baseline.csv`, and refuses to pass if the anchors have drifted. |
+| `eval/runlog.py` | The one CSV schema every diagnostic writes. Rejects a NaN or an out-of-range score at construction; a missing score is an empty cell with `vad_status FAIL`. |
+| `eval/canonical.py` | The single ffmpeg decode path to 16 kHz mono s16le, cached. Refuses to read anything not already canonical rather than converting it silently. |
 | `BENCHMARK_FORMAT.md` | File format, metadata and labelling spec. Applies now; the 30-plus speaker benchmark it describes is a later phase. |
 | `RECORDING_SESSIONS.md` | Field guide for whoever runs the session: room, device, 6-speaker protocol. |
 | `RECORDING_SCRIPTS.md` | Printable handout, one card per speaker, four takes each. |
@@ -397,6 +400,53 @@ gate now falls back to a quarter hop and then to the single most speech-active
 window, and reports how it got there; a score that cannot be produced is `None` with
 `vad_status FAIL` and a reason, never nan. See "Which 4 s window you score decides
 the answer" below, because fixing it turned up something larger.
+
+### The reproducible baseline, 2026-09-08
+
+`data/results/baseline.csv`, 36 rows, one frozen config, byte-identical on a re-run.
+Produced by
+
+```
+.venv\Scripts\python.exe -m ml.tools.baseline
+```
+
+Every figure below is the mean over speech-active windows on `xlsr-aasist`. The
+anchor check passed: `pc_bonafide` 0.0290 against the 0.029 recorded here,
+`pc_deepfake` 0.8487 against 0.847, ASVspoof bonafide median 0.0001 against a 0.01
+ceiling. So this environment matches the one that produced the tables above.
+
+| dataset | label | n | mean | min | max |
+|---|---|---|---|---|---|
+| asvspoof | genuine | 10 | 0.000 | 0.000 | 0.000 |
+| asvspoof | spoof | 10 | 1.000 | 0.999 | 1.000 |
+| ifd | genuine | 5 | 0.491 | 0.005 | 0.999 |
+| ifd | spoof | 5 | 0.795 | 0.128 | 1.000 |
+| internal | genuine | 5 | 0.789 | 0.436 | 0.990 |
+| internal | spoof | 1 | 0.938 | 0.938 | 0.938 |
+
+**The five genuine recordings and the clone reproduce to within 0.002**, which is
+worth stating because the working copies those figures came from are gitignored and
+no longer on disk. Each is now regenerated from its source media through the frozen
+decode, and the mapping is in `ml/tools/baseline.py` `SOURCES`:
+
+| recording | regenerated from | now | recorded above |
+|---|---|---|---|
+| `spk_01_source` | `Bharath.mpeg` | 0.436 | 0.436 |
+| `spk_02_source` | `Goutham.mp4` | 0.678 | 0.678 |
+| `spk_03_source` | `Nikhil.mp4` | 0.922 | 0.922 |
+| `spk_03b_source` | `Nikhil_2.mp4` | 0.920 | 0.920 |
+| `nik_clean` | `nikhil_clean.m4a` | 0.990 | 0.992 |
+| `nik_clone`, the clone | `nikhil_clone.wav` | 0.938 | 0.938 |
+
+**On the internal set the clone is still inside the genuine range.** Genuine spans
+0.436 to 0.990 and the clone sits at 0.938, above three of the five genuine
+speakers. That is the same finding as before, now with a reproducible command
+attached rather than a hand-run table. n=3 speakers, 5 recordings, 1 clone.
+
+**One number that reads worse in this table than in the ones above, and should.**
+ASVspoof bonafide is 0.000 and spoof 1.000, near-perfect separation, on the same
+model that cannot order our own six recordings. The two live in one CSV now, which
+makes the gap harder to quote selectively.
 
 ### Which 4 s window you score decides the answer, 2026-09-08
 

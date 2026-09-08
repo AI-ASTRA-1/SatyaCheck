@@ -1,0 +1,9 @@
+# Decoded working copies of real voice recordings. Never committed: AGENTS.md,
+# "no real audio, voiceprints or held-out evaluation data in the repo". The root
+# .gitignore already excludes *.wav; this excludes the whole cache directory so a
+# future format cannot leak through it.
+canonical/
+
+# Everything else here is a CSV of measurements, and those are the point.
+!results/
+!results/*.csv

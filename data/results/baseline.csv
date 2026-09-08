@@ -1,0 +1,37 @@
+run_id,filename,speaker,label,dataset,channel,duration_s,sample_rate,vad_status,speech_s,score,checkpoint,frozen_commit,notes
+baseline,LA_E_1000147,n/a,spoof,asvspoof,studio,3.180500,16000,PASS,2.280000,0.999658,Best_LA_model_for_DF.pth,304f2c182ee9a0e4dd06b25b1ff3f42c5709d277,"2019 LA eval, attack=A10"
+baseline,LA_E_1000273,n/a,spoof,asvspoof,studio,2.061625,16000,PASS,1.240000,0.999724,Best_LA_model_for_DF.pth,304f2c182ee9a0e4dd06b25b1ff3f42c5709d277,"2019 LA eval, attack=A15"
+baseline,LA_E_1000791,n/a,spoof,asvspoof,studio,1.490375,16000,PASS,1.040000,0.999467,Best_LA_model_for_DF.pth,304f2c182ee9a0e4dd06b25b1ff3f42c5709d277,"2019 LA eval, attack=A11"
+baseline,LA_E_1000841,n/a,spoof,asvspoof,studio,4.146625,16000,PASS,2.320000,0.999754,Best_LA_model_for_DF.pth,304f2c182ee9a0e4dd06b25b1ff3f42c5709d277,"2019 LA eval, attack=A09"
+baseline,LA_E_1000989,n/a,spoof,asvspoof,studio,2.218062,16000,PASS,1.220000,0.999713,Best_LA_model_for_DF.pth,304f2c182ee9a0e4dd06b25b1ff3f42c5709d277,"2019 LA eval, attack=A14"
+baseline,LA_E_1001227,n/a,spoof,asvspoof,studio,3.769500,16000,PASS,2.300000,0.999505,Best_LA_model_for_DF.pth,304f2c182ee9a0e4dd06b25b1ff3f42c5709d277,"2019 LA eval, attack=A11"
+baseline,LA_E_1001232,n/a,spoof,asvspoof,studio,2.555250,16000,PASS,0.980000,0.999726,Best_LA_model_for_DF.pth,304f2c182ee9a0e4dd06b25b1ff3f42c5709d277,"2019 LA eval, attack=A17"
+baseline,LA_E_1001320,n/a,spoof,asvspoof,studio,3.905438,16000,PASS,2.440000,0.999660,Best_LA_model_for_DF.pth,304f2c182ee9a0e4dd06b25b1ff3f42c5709d277,"2019 LA eval, attack=A10"
+baseline,LA_E_1001476,n/a,spoof,asvspoof,studio,3.498000,16000,PASS,2.260000,0.999706,Best_LA_model_for_DF.pth,304f2c182ee9a0e4dd06b25b1ff3f42c5709d277,"2019 LA eval, attack=A12"
+baseline,LA_E_1001893,n/a,spoof,asvspoof,studio,2.477063,16000,PASS,1.220000,0.999730,Best_LA_model_for_DF.pth,304f2c182ee9a0e4dd06b25b1ff3f42c5709d277,"2019 LA eval, attack=A09"
+baseline,LA_E_1002903,n/a,genuine,asvspoof,studio,3.195500,16000,PASS,0.860000,0.000075,Best_LA_model_for_DF.pth,304f2c182ee9a0e4dd06b25b1ff3f42c5709d277,"2019 LA eval, attack=-"
+baseline,LA_E_1003128,n/a,genuine,asvspoof,studio,2.512250,16000,PASS,0.660000,0.000079,Best_LA_model_for_DF.pth,304f2c182ee9a0e4dd06b25b1ff3f42c5709d277,"2019 LA eval, attack=-"
+baseline,LA_E_1004363,n/a,genuine,asvspoof,studio,3.959500,16000,PASS,1.580000,0.000037,Best_LA_model_for_DF.pth,304f2c182ee9a0e4dd06b25b1ff3f42c5709d277,"2019 LA eval, attack=-"
+baseline,LA_E_1005795,n/a,genuine,asvspoof,studio,3.541313,16000,PASS,1.820000,0.000092,Best_LA_model_for_DF.pth,304f2c182ee9a0e4dd06b25b1ff3f42c5709d277,"2019 LA eval, attack=-"
+baseline,LA_E_1007872,n/a,genuine,asvspoof,studio,4.090063,16000,PASS,1.060000,0.000104,Best_LA_model_for_DF.pth,304f2c182ee9a0e4dd06b25b1ff3f42c5709d277,"2019 LA eval, attack=-"
+baseline,LA_E_1008476,n/a,genuine,asvspoof,studio,3.150375,16000,PASS,1.320000,0.000077,Best_LA_model_for_DF.pth,304f2c182ee9a0e4dd06b25b1ff3f42c5709d277,"2019 LA eval, attack=-"
+baseline,LA_E_1010349,n/a,genuine,asvspoof,studio,3.884000,16000,PASS,1.880000,0.000039,Best_LA_model_for_DF.pth,304f2c182ee9a0e4dd06b25b1ff3f42c5709d277,"2019 LA eval, attack=-"
+baseline,LA_E_1011807,n/a,genuine,asvspoof,studio,2.551813,16000,PASS,1.420000,0.000076,Best_LA_model_for_DF.pth,304f2c182ee9a0e4dd06b25b1ff3f42c5709d277,"2019 LA eval, attack=-"
+baseline,LA_E_1015629,n/a,genuine,asvspoof,studio,4.050875,16000,PASS,0.980000,0.000082,Best_LA_model_for_DF.pth,304f2c182ee9a0e4dd06b25b1ff3f42c5709d277,"2019 LA eval, attack=-"
+baseline,LA_E_1017049,n/a,genuine,asvspoof,studio,3.494625,16000,PASS,0.560000,0.000035,Best_LA_model_for_DF.pth,304f2c182ee9a0e4dd06b25b1ff3f42c5709d277,"2019 LA eval, attack=-"
+baseline,alia_bonafide,ifd_alia,genuine,ifd,broadcast,5.000000,16000,PASS,3.200000,0.461596,Best_LA_model_for_DF.pth,304f2c182ee9a0e4dd06b25b1ff3f42c5709d277,"IndieFake sample, 5 to 6 s, window choice matters"
+baseline,alia_deepfake,ifd_alia,spoof,ifd,generated,5.888000,16000,PASS,3.420000,0.999488,Best_LA_model_for_DF.pth,304f2c182ee9a0e4dd06b25b1ff3f42c5709d277,"IndieFake sample, 5 to 6 s, window choice matters"
+baseline,cb_bonafide,ifd_cb,genuine,ifd,broadcast,6.528000,16000,PASS,3.880000,0.962188,Best_LA_model_for_DF.pth,304f2c182ee9a0e4dd06b25b1ff3f42c5709d277,"IndieFake sample, 5 to 6 s, window choice matters"
+baseline,cb_deepfake,ifd_cb,spoof,ifd,generated,5.237375,16000,PASS,3.200000,0.999526,Best_LA_model_for_DF.pth,304f2c182ee9a0e4dd06b25b1ff3f42c5709d277,"IndieFake sample, 5 to 6 s, window choice matters"
+baseline,madhavan_bonafide,ifd_madhavan,genuine,ifd,broadcast,5.000000,16000,PASS,3.560000,0.999270,Best_LA_model_for_DF.pth,304f2c182ee9a0e4dd06b25b1ff3f42c5709d277,"IndieFake sample, 5 to 6 s, window choice matters"
+baseline,madhavan_deepfake,ifd_madhavan,spoof,ifd,generated,7.658688,16000,PASS,3.840000,0.999464,Best_LA_model_for_DF.pth,304f2c182ee9a0e4dd06b25b1ff3f42c5709d277,"IndieFake sample, 5 to 6 s, window choice matters"
+baseline,pc_bonafide,ifd_pc,genuine,ifd,broadcast,5.100000,16000,PASS,3.140000,0.029010,Best_LA_model_for_DF.pth,304f2c182ee9a0e4dd06b25b1ff3f42c5709d277,"IndieFake sample, 5 to 6 s, window choice matters"
+baseline,pc_deepfake,ifd_pc,spoof,ifd,generated,5.056000,16000,PASS,2.020000,0.848733,Best_LA_model_for_DF.pth,304f2c182ee9a0e4dd06b25b1ff3f42c5709d277,"IndieFake sample, 5 to 6 s, window choice matters"
+baseline,sadhguru_bonafide,ifd_sadhguru,genuine,ifd,broadcast,5.472000,16000,PASS,4.140000,0.004560,Best_LA_model_for_DF.pth,304f2c182ee9a0e4dd06b25b1ff3f42c5709d277,"IndieFake sample, 5 to 6 s, window choice matters"
+baseline,sadhguru_deepfake,ifd_sadhguru,spoof,ifd,generated,6.026688,16000,PASS,2.040000,0.127860,Best_LA_model_for_DF.pth,304f2c182ee9a0e4dd06b25b1ff3f42c5709d277,"IndieFake sample, 5 to 6 s, window choice matters"
+baseline,nik_clean,speaker_c,genuine,internal,phone,68.352000,16000,PASS,25.740000,0.989851,Best_LA_model_for_DF.pth,304f2c182ee9a0e4dd06b25b1ff3f42c5709d277,regenerated from nikhil_clean.m4a
+baseline,nik_clone,speaker_c,spoof,internal,generated,49.790000,16000,PASS,33.620000,0.938335,Best_LA_model_for_DF.pth,304f2c182ee9a0e4dd06b25b1ff3f42c5709d277,regenerated from nikhil_clone.wav
+baseline,spk_01_source,speaker_a,genuine,internal,phone,65.424000,16000,PASS,28.000000,0.435936,Best_LA_model_for_DF.pth,304f2c182ee9a0e4dd06b25b1ff3f42c5709d277,regenerated from Bharath.mpeg
+baseline,spk_02_source,speaker_b,genuine,internal,phone,88.661312,16000,PASS,49.340000,0.678021,Best_LA_model_for_DF.pth,304f2c182ee9a0e4dd06b25b1ff3f42c5709d277,regenerated from Goutham.mp4
+baseline,spk_03_source,speaker_c,genuine,internal,phone,69.054688,16000,PASS,34.860000,0.922479,Best_LA_model_for_DF.pth,304f2c182ee9a0e4dd06b25b1ff3f42c5709d277,regenerated from Nikhil.mp4
+baseline,spk_03b_source,speaker_c,genuine,internal,phone,70.401438,16000,PASS,36.080000,0.919539,Best_LA_model_for_DF.pth,304f2c182ee9a0e4dd06b25b1ff3f42c5709d277,regenerated from Nikhil_2.mp4

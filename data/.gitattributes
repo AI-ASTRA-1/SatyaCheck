@@ -1,0 +1,4 @@
+# Diagnostic CSVs are compared byte for byte across runs and across machines. Without
+# this, autocrlf rewrites them on checkout and a re-run "differs" for a reason that has
+# nothing to do with the model.
+*.csv -text
