@@ -74,9 +74,16 @@ Report section 4 groups these as three signal families; the architecture in sect
 the deck's technical approach both show the four checks above.
 
 XLS-R carries the multilingual front end: Hindi, English, Tamil, Marathi, Bengali and more.
-AASIST-L (~85K params) runs on CPU. All inference is local, so there is no external API to
-fail on demo day, and the models are open source with public checkpoints, so there is
-nothing to license.
+AASIST-L (~85K params) runs on CPU. Checks 1 to 3 run locally on open-source checkpoints,
+so there is nothing to license and nothing external to fail.
+
+**Check 4 is the exception as of 2026-09-09.** It transcribes locally with faster-whisper,
+but scores the transcript through the Groq API, so it does depend on the network on demo
+day and it does send transcript text off the machine. A local keyword scorer takes over
+whenever the API is unavailable, so the check degrades rather than disappearing. This is a
+prototype decision taken deliberately, recorded in `.env.example` and `ml/README.md`, and
+it is not how the deployed system is described. Do not describe the system as local-only
+inference while it is wired this way.
 
 **Why read the transcript at all?** Because what is being said is independent evidence. A
 voice can be real and the call still a scam (a coerced relative, a hired mule), and a cloned
