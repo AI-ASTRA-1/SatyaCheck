@@ -1,0 +1,7 @@
+{
+  "speaker_volume": "80%, system slider, unchanged across all ten clips",
+  "phone_model": "Samsung S23",
+  "distance_cm": "5",
+  "room": "unrecorded at capture time",
+  "background_noise": "unrecorded at capture time; measured from the take: noise floor -56.6 dBFS, speech -10.6 dBFS, SNR 46.1 dB, peak 0.0 dBFS, 0.001% of samples clipped"
+}

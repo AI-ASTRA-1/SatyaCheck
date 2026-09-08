@@ -94,7 +94,16 @@ def load_conditions(capture_dir: Path) -> dict[str, str]:
     missing = [key for key in REQUIRED_CONDITIONS if not str(conditions.get(key, "")).strip()]
     if missing:
         raise SystemExit(f"{path} is missing: {', '.join(missing)}")
-    return {key: str(conditions[key]) for key in REQUIRED_CONDITIONS}
+    recorded = {key: str(conditions[key]) for key in REQUIRED_CONDITIONS}
+    # "unrecorded" is a truthful value and is accepted, but it is a hole in the
+    # experiment and must be visible in the run output, not only in a JSON file.
+    unrecorded = [k for k, v in recorded.items() if "unrecorded" in v.lower()]
+    if unrecorded:
+        print(
+            f"  WARNING: not recorded at capture time: {', '.join(unrecorded)}. "
+            "Deltas from this capture cannot be reproduced from the notes alone."
+        )
+    return recorded
 
 
 def conditions_note(conditions: dict[str, str]) -> str:

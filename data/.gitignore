@@ -7,8 +7,12 @@ canonical/
 # Replayed captures for the channel transplant. Same rule, and these are recordings
 # of a real acoustic path. The conditions file is metadata, not audio, and the
 # controls must travel with the repo or the deltas cannot be read later.
-replay/*
-!replay/capture_conditions.json
+# Excludes everything under replay/ recursively, then re-admits directories so git
+# descends into them, then the conditions files. Without the directory rule git
+# never looks inside an excluded folder and the negation cannot take effect.
+replay/**
+!replay/**/
+!replay/**/capture_conditions.json
 
 # Everything else here is a CSV of measurements, and those are the point.
 !results/

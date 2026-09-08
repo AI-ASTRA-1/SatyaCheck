@@ -19,7 +19,11 @@ is a stub, and what the environment can currently do.
 | `tools/frozen_config.py` | Reads the frozen diagnosis config out of the running code. `FROZEN.md` at the repo root is transcribed from it, and `tests/test_frozen_config.py` fails if the two drift apart. |
 | `tools/baseline.py` | Scores every clip we have into `data/results/baseline.csv`, and refuses to pass if the anchors have drifted. |
 | `tools/ood.py` | Asks what the model says about audio that is not speech at all. Writes `data/results/ood.csv`. |
-| `tools/transplant.py` | Holds the speech constant and varies only the acquisition channel. Two of six cells scored; the other four need a human with a speaker and a phone. |
+| `tools/transplant.py` | Holds the speech constant and varies only the acquisition channel. Complete for two devices. |
+| `tools/split_replay.py` | Cuts a continuous replay take back into its ten clips by envelope cross-correlation. |
+| `tools/gate.py` | Applies the five H+4 rules in order and prints the result, with the saturation diagnostic that stops Rule 4 being read as Rule 3. |
+| `eval/align.py` | Envelope cross-correlation, for locating a known clip inside a recording of it. |
+| `eval/gate.py` | The five rules and `headroom_traversed`. |
 | `eval/transplant.py` | `separation`, `gap`, and what each means at small n. |
 | `TRANSPLANT_CAPTURE.md` | The capture procedure, the five controls, and how to read the result. |
 | `eval/probes.py` | Seeded non-speech generators: white noise, pink noise, a synthesised chord bed, near-silence. Plus evenly spaced segment sampling. |
@@ -406,53 +410,90 @@ window, and reports how it got there; a score that cannot be produced is `None` 
 `vad_status FAIL` and a reason, never nan. See "Which 4 s window you score decides
 the answer" below, because fixing it turned up something larger.
 
-### Channel transplant, two of six cells, 2026-09-08
+### The channel does not move genuine into spoof. It moves everything to 1.0, 2026-09-08
 
-`data/results/transplant.csv`. The tool is built and tested; the experiment is not
-finished, because four of the six cells need a person, a speaker and a phone.
+The decisive measurement. IFD `pc` alone would have been one subject, so all five
+were replayed: ten clips played through a speaker and recorded on two handsets in
+one continuous take each, then cut back out by envelope cross-correlation
+(`ml/tools/split_replay.py`). `data/results/transplant_iphone.csv` and
+`transplant_samsung.csv`, 30 rows each.
 
-| | A: original file | B: speaker to phone | C: Exotel |
-|---|---|---|---|
-| bonafide, 5 subjects | **0.0046 to 0.9993** | not recorded | derived in software |
-| deepfake, 5 subjects | **0.1279 to 0.9995** | not recorded | derived in software |
+| clip | class | original | iPhone | delta | Samsung | delta |
+|---|---|---|---|---|---|---|
+| `alia_bonafide` | genuine | 0.4616 | 0.9996 | +0.538 | 0.9994 | +0.538 |
+| `cb_bonafide` | genuine | 0.9622 | 0.9994 | +0.037 | 0.9676 | +0.005 |
+| `madhavan_bonafide` | genuine | 0.9993 | 0.9928 | -0.007 | 0.9997 | +0.000 |
+| `pc_bonafide` | genuine | 0.0290 | 0.9989 | **+0.970** | 0.4666 | +0.438 |
+| `sadhguru_bonafide` | genuine | 0.0046 | 0.9300 | **+0.925** | 0.7042 | +0.700 |
+| `alia_deepfake` | spoof | 0.9995 | 0.9996 | +0.000 | 0.9995 | +0.000 |
+| `cb_deepfake` | spoof | 0.9995 | 0.9994 | -0.000 | 0.9996 | +0.000 |
+| `madhavan_deepfake` | spoof | 0.9995 | 0.8842 | -0.115 | 0.9971 | -0.002 |
+| `pc_deepfake` | spoof | 0.8487 | 0.7119 | -0.137 | 0.7327 | -0.116 |
+| `sadhguru_deepfake` | **spoof** | 0.1279 | 0.9994 | **+0.872** | 0.9993 | **+0.872** |
 
-**Path A separation across all five subjects: overlap 0.8714, gap -0.8714.** The
-classes almost entirely overlap before any transplant.
+**The size of the move is predicted by where the clip started, not by its class.**
+Over the 20 paired observations, the correlation between a clip's original score and
+how far it moved is **r = -0.938**. Split by class it is -0.922 for genuine and
+**-0.956 for spoof**, so if anything the effect is cleaner on the class it is not
+supposed to touch.
 
-`pc` alone gives genuine 0.0290 against spoof 0.8487, a gap of +0.8180, and it is
-**the one subject of five where this model separates at all**. Choosing it for the
-transplant because it has the cleanest separation is selecting on the outcome, so the
-transplant runs on all five (`--all-subjects`). The paired per-subject delta is still
-the right statistic, since each subject is its own control, but "separation before"
-for the set is 0.87 overlap and not `pc`'s gap.
+**`sadhguru_deepfake` is the sentence that settles it.** A spoof clip went from 0.128
+to 0.999 on both handsets, covering 99% of its headroom. A channel that pushed
+genuine audio into the spoof class could not do that.
 
-**Path C is derived in software, not captured.** `acquisitions/exotel/` is a
-docstring and the streaming question in `AGENTS.md` is still open, so the only Exotel
-audio obtainable is a recording export at 8 kb/s, which this file already records as
-turning 8 of 8 genuine clips into 0.999 alerts. `--simulate-exotel` applies G.711
-mu-law at 64 kb/s to the path B recording instead, which is what this file records
-the live stream as carrying. Those rows carry `channel: phone_g711_sim` and say
-SIMULATED in their notes. No gate rule reads path C.
+Clips starting below 0.5 moved by +0.73 on average. Clips starting at 0.5 or above
+moved by -0.03. Before the replay, 10 of 20 scored above 0.9; after, 15 of 20.
 
-All four deltas are `not measured`, and the tool reports them that way rather than
-as zero. A zero would read as "the channel changed nothing", which is the opposite of
-"we did not measure it", and Rule 5 fires on small deltas. `ml/TRANSPLANT_CAPTURE.md`
-is the procedure.
+**What this rules out, and it is the expensive one.** Channel-replay augmentation
+fixes a channel that moves one class. This channel moves whatever is far from 1.0
+toward 1.0, both classes alike. Training through it would move both classes back
+together and separation would not improve. This is the Rule 4 finding, and it is
+what `AGENTS.md` means by the model measuring distance from its training
+distribution rather than a genuine-versus-spoof boundary.
 
-**Two arithmetic cautions recorded before the numbers arrive**, because both would
-otherwise be found while reading a result and be tempting to reinterpret:
+**Why the gate rules alone say something different.** Run mechanically:
 
-- **`overlap` is 0.0 by construction at one clip per class.** With a single score per
-  class the expression reduces to `min(g, s) - max(g, s)`, which is never positive
-  and is floored to zero. It reports 0.0 even when the classes invert. `gap` is
-  reported beside it and is negative in that case. Transplanting three subjects
-  instead of one would make `overlap` informative, at three times the recording.
-- **`delta_spoof_phone` cannot exceed 0.152 on this subject**, because `pc_deepfake`
-  already scores 0.8487 and the score is capped at 1.0. Rule 4 asks for it to exceed
-  0.40, which is arithmetically impossible here. If both classes saturate upward it
-  will look like `delta_spoof_phone` near +0.15, which is exactly Rule 3's "spoof
-  stayed put" threshold. The absolute path B scores have to be read, not only the
-  deltas.
+| | iPhone | Samsung |
+|---|---|---|
+| `delta_genuine_phone` | +0.4928 | +0.3362 |
+| `delta_spoof_phone` | +0.1239 | +0.1506 |
+| rule matched | **3, retrain** | **none** |
+
+Rule 3 fires on the iPhone because `delta_spoof` is small. It is small because four
+of the five deepfakes already scored 0.85 or above and **cannot** rise by the 0.40
+Rule 4 asks for; their maximum possible delta is 0.15. The one deepfake with room
+moved +0.872. `ml/tools/gate.py` prints this as a stated disagreement rather than
+letting the rule stand alone, and `headroom_traversed` is the statistic that removes
+the ceiling:
+
+```
+iPhone    genuine: 3/3 covered more than 50% of their headroom, range +0.93 to +1.00
+          spoof:   1/2 covered more than 50% of their headroom, range -0.90 to +1.00
+Samsung   genuine: 2/3 covered more than 50% of their headroom, range +0.45 to +1.00
+          spoof:   1/2 covered more than 50% of their headroom, range -0.77 to +1.00
+```
+
+**The two handsets give different gate answers**, which is itself a result: on the
+iPhone Rule 3 fires, on the Samsung no rule matches. A decision procedure whose
+output depends on which phone was used is not reading a property of the model.
+
+**Separation, before and after.** `overlap` falls from 0.8714 to 0.0696 on the
+iPhone, which looks like an improvement and is not: the genuine range collapses to
+0.9300 to 0.9996 while spoof spans 0.7119 to 0.9996. The `gap` stays negative
+(-0.8714 to -0.2877), so the classes remain inverted. Everything is simply crowded
+against the ceiling.
+
+**Confounds, stated because they are real.** The two devices were recorded at
+different volume and distance (100% at 25 cm against 80% at 5 cm), so the *comparison
+between* handsets is confounded; each device's own paired deltas are not. The Samsung
+take peaks at 0.0 dBFS with 0.001% of samples clipped, which is a nonlinear
+distortion and not the acquisition channel. Room and background noise were not
+recorded at capture time; the noise figures in the conditions files were measured
+from the takes afterwards (iPhone SNR 20.1 dB, Samsung 46.1 dB). `madhavan_bonafide`
+on the Samsung was matched on disjointness rather than on a clean correlation margin.
+
+**Scope.** One checkpoint, one replay session, two handsets, five subjects, ten
+clips. Not a rate.
 
 ### The model does not call non-speech synthetic, 2026-09-08
 

@@ -1,0 +1,7 @@
+{
+  "speaker_volume": "100%, system slider, unchanged across all ten clips",
+  "phone_model": "iPhone 17, Voice Memos, Lossless",
+  "distance_cm": "25",
+  "room": "unrecorded at capture time",
+  "background_noise": "unrecorded at capture time; measured from the take: noise floor -42.1 dBFS, speech -22.0 dBFS, SNR 20.1 dB, peak -6.9 dBFS, no clipping"
+}
