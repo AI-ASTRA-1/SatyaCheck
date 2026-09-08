@@ -16,6 +16,15 @@ ml = [
     "torchaudio==2.11.0",
     "transformers",
     "onnxruntime",
+    # Previously installed with --no-deps to stop speechbrain resolving the CPU
+    # torch wheel from PyPI.  The [tool.uv.sources] routing now handles that, so
+    # declaring them normally is safe.  Unpinned: no frozen config or test asserts
+    # their versions, unlike torch/torchaudio above.
+    "speechbrain",
+    "hyperpyyaml",
+    "sentencepiece",
+    "joblib",
+    "scipy",
 ]
 runtime = [
     "fastapi",

@@ -65,6 +65,12 @@ so any `uv sync` prunes them. They were installed with `--no-deps` specifically 
 speechbrain resolving the CPU torch wheel, and the new `[tool.uv.sources]` pin removes
 that reason, so declaring them normally should now be safe. Until then, nobody should
 run a bare `uv sync`, and the merge testing used `.venv\Scripts\python.exe` directly.
+**RESOLVED 2026-09-09.** All five declared in the `ml` extra of `pyproject.toml`,
+unpinned (no frozen config asserts their versions). `uv lock` confirms torch and
+torchaudio still resolve to `2.11.0+cu128`. `uv sync --extra ml --extra runtime
+--dry-run` drops from 38 to 23 uninstalls; speechbrain, hyperpyyaml, sentencepiece,
+joblib and scipy are no longer among them. All tests pass (445 ml, 61 backend,
+2 transport invariant, mypy clean).
 
 ## R1 (ML) - 2026-09-08 - AFFECTS WHAT THE DEMO AND DECK MAY CLAIM
 

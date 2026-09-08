@@ -1423,14 +1423,14 @@ The two commands behave differently, and the difference is what bit us:
   not by pruning, but by resolving `torch` afresh from PyPI. With the pin it now
   holds. Verified 2026-09-08: the same command reports 2.11.0+cu128, cuda True.
 - **`uv sync` is exact and prunes.** `speechbrain`, `hyperpyyaml`, `sentencepiece`,
-  `joblib` and `scipy` are installed and imported but not declared in
-  `pyproject.toml`, having been added with `--no-deps` to stop speechbrain dragging
-  in the CPU torch wheel. Measured with `--dry-run`: `uv sync --extra runtime` would
-  uninstall 66 packages including torch and speechbrain, and even
-  `uv sync --extra ml --extra runtime` would uninstall 38, speechbrain among them
-  (torch survives that one, so the pin is doing its job). **Do not run a bare
-  `uv sync`** until those five are declared, or pass `--inexact`. Declaring them is a
-  shared-config change; raised in `QUESTIONS.md`.
+  `joblib` and `scipy` are now declared in the `ml` extra of `pyproject.toml`,
+  unpinned (no frozen config asserts their versions).  The previous `--no-deps`
+  workaround was needed to stop speechbrain resolving the CPU torch wheel; the
+  `[tool.uv.sources]` routing makes that unnecessary.  Measured with `--dry-run`:
+  `uv sync --extra ml --extra runtime` would uninstall 23 packages, none of which
+  are speechbrain or torch.  The remaining 23 are packages installed directly
+  (matplotlib, faster-whisper, etc.) that are not yet declared.  `uv sync --extra
+  runtime` alone still lists 66 uninstalls because the `ml` extra is not included.
 
 Three consequences worth writing down:
 
