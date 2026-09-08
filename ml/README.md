@@ -19,6 +19,9 @@ is a stub, and what the environment can currently do.
 | `tools/frozen_config.py` | Reads the frozen diagnosis config out of the running code. `FROZEN.md` at the repo root is transcribed from it, and `tests/test_frozen_config.py` fails if the two drift apart. |
 | `tools/baseline.py` | Scores every clip we have into `data/results/baseline.csv`, and refuses to pass if the anchors have drifted. |
 | `tools/ood.py` | Asks what the model says about audio that is not speech at all. Writes `data/results/ood.csv`. |
+| `tools/transplant.py` | Holds the speech constant and varies only the acquisition channel. Two of six cells scored; the other four need a human with a speaker and a phone. |
+| `eval/transplant.py` | `separation`, `gap`, and what each means at small n. |
+| `TRANSPLANT_CAPTURE.md` | The capture procedure, the five controls, and how to read the result. |
 | `eval/probes.py` | Seeded non-speech generators: white noise, pink noise, a synthesised chord bed, near-silence. Plus evenly spaced segment sampling. |
 | `eval/runlog.py` | The one CSV schema every diagnostic writes. Rejects a NaN or an out-of-range score at construction; a missing score is an empty cell with `vad_status FAIL`. |
 | `eval/canonical.py` | The single ffmpeg decode path to 16 kHz mono s16le, cached. Refuses to read anything not already canonical rather than converting it silently. |
@@ -402,6 +405,39 @@ gate now falls back to a quarter hop and then to the single most speech-active
 window, and reports how it got there; a score that cannot be produced is `None` with
 `vad_status FAIL` and a reason, never nan. See "Which 4 s window you score decides
 the answer" below, because fixing it turned up something larger.
+
+### Channel transplant, two of six cells, 2026-09-08
+
+`data/results/transplant.csv`. The tool is built and tested; the experiment is not
+finished, because four of the six cells need a person, a speaker and a phone.
+
+| | A: original file | B: speaker to phone | C: through Exotel |
+|---|---|---|---|
+| IFD `pc` bonafide | **0.0290** | not recorded | not recorded |
+| IFD `pc` deepfake | **0.8487** | not recorded | not recorded |
+
+Path A separation: genuine 0.0290, spoof 0.8487, **gap +0.8180**. That is the
+separation the transplant is designed to try to collapse.
+
+All four deltas are `not measured`, and the tool reports them that way rather than
+as zero. A zero would read as "the channel changed nothing", which is the opposite of
+"we did not measure it", and Rule 5 fires on small deltas. `ml/TRANSPLANT_CAPTURE.md`
+is the procedure.
+
+**Two arithmetic cautions recorded before the numbers arrive**, because both would
+otherwise be found while reading a result and be tempting to reinterpret:
+
+- **`overlap` is 0.0 by construction at one clip per class.** With a single score per
+  class the expression reduces to `min(g, s) - max(g, s)`, which is never positive
+  and is floored to zero. It reports 0.0 even when the classes invert. `gap` is
+  reported beside it and is negative in that case. Transplanting three subjects
+  instead of one would make `overlap` informative, at three times the recording.
+- **`delta_spoof_phone` cannot exceed 0.152 on this subject**, because `pc_deepfake`
+  already scores 0.8487 and the score is capped at 1.0. Rule 4 asks for it to exceed
+  0.40, which is arithmetically impossible here. If both classes saturate upward it
+  will look like `delta_spoof_phone` near +0.15, which is exactly Rule 3's "spoof
+  stayed put" threshold. The absolute path B scores have to be read, not only the
+  deltas.
 
 ### The model does not call non-speech synthetic, 2026-09-08
 
