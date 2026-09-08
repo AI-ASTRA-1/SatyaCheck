@@ -124,3 +124,80 @@ opensmile and faster-whisper are approved by the ML lead but not yet installed.
 reproducible, and whether numpy should join the `ml` extra. numpy is installed and in
 use by `ml/` now.
 
+
+## R1 (ML) - 2026-09-08 - BLOCKING FOR ANY END-TO-END DEMO
+
+**Blocked on:** Stages 02 to 06 do not exist on any branch, so nothing connects
+acquisition to the checks to the app. `backend/` and `ml/runner/` are R2's folders
+and R1 may not edit them.
+
+**What I tried:** Compared blob SHAs across `main`, `frontend-a`, `mobile-app` and
+`webrtc_v1`. `backend/` is 7 files, byte-identical to `main` on every branch: the
+original `__init__.py` docstrings. Same for `ml/runner/`.
+
+```
+acquisitions/webrtc   13 files   produces AudioChunk          EXISTS
+backend/app/ingestion            stage 02 decode/normalize    MISSING
+backend/app/pipeline             stage 03 buffer/silence      MISSING
+ml/runner                        stage 04 fan-out, 180 ms     MISSING
+backend/app/fusion               stage 05 score 0-100         MISSING
+backend/app/response             stage 06 WebSocket dispatch  MISSING
+app/                  63 files   consumes RiskUpdate          EXISTS
+ml/checks             R1         machine_fingerprint          EXISTS
+```
+
+Contract compliance across the team is otherwise clean: `contracts/`, `tests/`,
+`docs/` and `pyproject.toml` are identical on every branch, folder ownership was
+respected, and `app/src/ws/types.ts` matches `contracts/risk.py` exactly.
+
+**What I need:** Whoever is assembling the demo to know that the two ends are built
+and contract-correct but there is no middle. An end-to-end run is not possible until
+ingestion, pipeline, runner, fusion and response exist.
+
+## R1 (ML) - 2026-09-08 - AFFECTS THE ACQUISITION INTEGRATION
+
+**Blocked on:** Nothing. This is a measured constraint that stage 02 needs to respect,
+and getting it wrong silently breaks detection rather than raising.
+
+**What I tried:** Scored two real Exotel call recordings (8000 Hz mono, 8 kb/s mp3).
+All three checkpoints saturate near 1.000, meaning every genuine caller is flagged at
+maximum confidence. Traced the cause by pushing known-bonafide ASVspoof audio, which
+scores 0.000 clean, through the same channel:
+
+| Channel | mean P(synthetic) | flagged > 0.5 |
+|---|---|---|
+| 8 kHz mp3 64k | 0.000 | 0/8 |
+| 8 kHz mp3 32k | 0.001 | 0/8 |
+| 8 kHz mp3 16k | 0.299 | 1/8 |
+| 8 kHz mp3 8k | 0.999 | 8/8 |
+| G.711 mu-law 64k (live stream) | 0.000 | 0/8 |
+
+Raising the bitrate afterwards recovers nothing: 8 kb/s re-encoded to 64 kb/s still
+scores 0.999, to 128 kb/s still 0.999, and through G.711 1.000. Lossy damage is
+permanent and no cleanup stage placed after it can undo it.
+
+**What I need:** Stage 02 to feed the check audio decoded straight from the G.711
+stream payload to PCM, and to never let call audio touch a low-bitrate codec anywhere
+between ingestion and the model. Never substitute a recording export for the stream,
+including as a testing convenience. One 8 kb/s hop anywhere in that path turns every
+genuine caller into a maximum-confidence alert.
+
+This aligns with the existing privacy rule that there are no call recordings at rest.
+
+## R1 (ML) - 2026-09-08 - REPO HYGIENE, affects every branch
+
+**Blocked on:** The root `.gitignore` is not R1's file.
+
+**What I tried:** The root `.gitignore` contains a bare `.gitignore` pattern on line
+3, which matches at every depth. It therefore ignores itself, so it is untracked and
+teammates never receive it. That is why `__pycache__/*.pyc` is committed on
+`webrtc_v1`. It was also blocking `ml/.gitignore`, which I force-added.
+
+The root file covers `*.wav`, `*.mp3`, `*.flac`, `*.opus` and `*.amr` but not the
+video containers phone recorders actually produce, so a teammate dropping an `.mp4`
+or `.mpeg` recording into the repo would commit real voice audio. `ml/.gitignore`
+closes that for `ml/` only.
+
+**What I need:** R2 to delete line 3 of the root `.gitignore`, commit the file so
+everyone gets it, and add `*.mp4`, `*.mpeg`, `*.m4a`, `*.aac`, `*.ogg` and `*.webm`
+to it.

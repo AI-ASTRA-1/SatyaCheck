@@ -376,6 +376,86 @@ window passes `sweep.py`'s 0.4 activity floor on a 6 s clip. The AGC and SNR col
 resolve, so the file is readable and the gate is too aggressive for short clips.
 Not fixed yet.
 
+### The Exotel channel alone destroys the detector, 2026-09-08
+
+Two real call recordings from Exotel, the primary acquisition path. Format is
+**8000 Hz mono, 8 kb/s mp3**, 99 s and 53 s. Every model saturates:
+
+| Recording | XLS-R DF | AASIST 2.12% | AASIST room |
+|---|---|---|---|
+| `exotel_call_1` (24 windows) | 1.000 | 1.000 | 0.999 |
+| `exotel_call_2` (13 windows) | 1.000 | 0.991 | 0.981 |
+
+Assuming these are genuine human calls, which is what they were collected as, that
+is a false-positive rate of 2/2 at maximum confidence on the transport the product
+is built around.
+
+**The cause is the bitrate, and it is not the speakers.** Known-bonafide ASVspoof
+eval audio, n=8, which scores 0.000 untouched, pushed through that same channel:
+
+| Channel | mean | median | min | flagged > 0.5 |
+|---|---|---|---|---|
+| as-is, 16 kHz flac | 0.000 | 0.000 | 0.000 | 0/8 |
+| 16 kHz mp3 128k | 0.000 | 0.000 | 0.000 | 0/8 |
+| 8 kHz mp3 64k | 0.000 | 0.000 | 0.000 | 0/8 |
+| 8 kHz mp3 32k | 0.001 | 0.000 | 0.000 | 0/8 |
+| 8 kHz mp3 16k | 0.299 | 0.217 | 0.000 | 1/8 |
+| **8 kHz mp3 8k (Exotel)** | **0.999** | **1.000** | **0.996** | **8/8** |
+
+Narrowband is not the problem: 8 kHz at 64 kb/s scores 0.000. Neither is mp3 as
+such. There is a cliff between 32 kb/s and 8 kb/s, with 16 kb/s sitting on the edge.
+Below it, genuine speech is unconditionally called synthetic.
+
+**Two consequences, and the second is architectural.**
+
+1. **This is fixable by augmentation, and cheaply.** The augmentation package already
+   owns this class of problem. Adding low-bitrate mp3 to `PhoneChannelAugmenter` and
+   retraining is the same move that fixed level and reverberation. Nothing here says
+   the model cannot learn the channel; it says it has never seen it.
+2. **It sharpens the open question in `AGENTS.md` about streaming.** That question
+   was framed as latency: can Exotel stream during the call, or only hand over a
+   recording afterwards. This makes it a correctness question as well. A live
+   G.711 stream is 64 kb/s, where the model scores 0.000 and our existing G.711
+   augmentation already applies. An 8 kb/s recording export is where detection
+   collapses. The streaming path is not merely faster, it may be the only one on
+   which this check functions at all.
+
+**Resolved 2026-09-08: the stream is fine and transcoding is not the answer.** The
+acquisition decision is that Exotel streams call audio into the backend, so the
+8 kb/s mp3 above is a recording export rather than the live path. Two follow-up
+questions were measured on the same n=8 known-bonafide audio:
+
+| Condition | mean | median | min | flagged > 0.5 |
+|---|---|---|---|---|
+| as-is, studio 16 kHz | 0.000 | 0.000 | 0.000 | 0/8 |
+| **G.711 mu-law 64k, the live stream** | **0.000** | **0.000** | **0.000** | **0/8** |
+| 8 kb/s mp3, the export | 0.999 | 1.000 | 0.996 | 8/8 |
+| 8 kb/s re-encoded to 64 kb/s | 0.999 | 1.000 | 0.996 | 8/8 |
+| 8 kb/s re-encoded to 128 kb/s | 0.999 | 1.000 | 0.997 | 8/8 |
+| 8 kb/s then G.711 mu-law 64k | 1.000 | 1.000 | 1.000 | 8/8 |
+
+**Raising the bitrate afterwards recovers nothing.** A lossy encoder discards
+information permanently; re-encoding at a higher rate wraps the damaged signal in a
+larger container and preserves every artifact. 64 kb/s, 128 kb/s and G.711 all leave
+the score at 0.999 or above. Passing it through G.711 afterwards is marginally worse,
+not better. Upward transcoding is never restoration, and no cleanup stage can be
+placed after an 8 kb/s hop to rescue it.
+
+**The live stream needs no conversion.** G.711 mu-law at 64 kb/s scores 0.000,
+identical to studio audio, and it is already in `PhoneChannelAugmenter`, so it is a
+channel the model is explicitly trained through. Raw 8 kHz PCM would be equally fine.
+
+**The engineering rule this produces.** Feed the check the stream, decoded straight
+from the G.711 payload to PCM. Never let call audio touch a low-bitrate codec
+anywhere between ingestion and the model, and never substitute a recording export for
+the stream, including as a convenience during testing. One 8 kb/s hop anywhere in
+that path is unrecoverable and turns every genuine caller into a maximum-confidence
+alert.
+
+This happens to align with the privacy rule already in `AGENTS.md`, that there are no
+call recordings at rest and analysis is in-flight. The architecture that keeps us
+compliant is also the only one on which this check functions.
+
 ### No simulable channel degradation reproduces the failure, 2026-09-08
 
 Individual effects had each been ruled out separately, which leaves the possibility
