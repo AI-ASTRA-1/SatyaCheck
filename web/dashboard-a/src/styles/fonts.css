@@ -1,0 +1,20 @@
+/* Self-hosted variable fonts via @fontsource, not a CDN. Duplicated verbatim
+   from web/landing/src/styles/fonts.css. */
+@import '@fontsource-variable/playfair-display';
+@import '@fontsource-variable/outfit';
+
+@font-face {
+  font-family: 'Playfair Display Fallback';
+  src: local('Georgia'), local('Times New Roman');
+  size-adjust: 112%;
+  ascent-override: 88%;
+  descent-override: 22%;
+}
+
+@font-face {
+  font-family: 'Outfit Fallback';
+  src: local('Arial'), local('Helvetica Neue');
+  size-adjust: 104%;
+  ascent-override: 92%;
+  descent-override: 24%;
+}

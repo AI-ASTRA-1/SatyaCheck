@@ -1,0 +1,134 @@
+@import "tailwindcss";
+@import "./tokens.css";
+@import "./fonts.css";
+
+@theme {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-accent-gold: var(--accent-gold);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-risk-low: var(--risk-low);
+  --color-risk-medium: var(--risk-medium);
+  --color-risk-high: var(--risk-high);
+  --color-risk-critical: var(--risk-critical);
+  --font-family-display: var(--font-display);
+  --font-family-sans: var(--font-sans);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  line-height: 1.5;
+}
+
+h1, h2, h3 {
+  font-family: var(--font-display);
+  line-height: 1.1;
+  margin: 0;
+  font-weight: 600;
+}
+
+p {
+  line-height: 1.7;
+  margin: 0;
+}
+
+img, svg {
+  max-width: 100%;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* Glassmorphism: requires the colourful animated mesh behind it to read.
+   Ships a solid fallback for browsers without backdrop-filter support. */
+.glass {
+  background: rgba(26, 26, 31, 0.55);
+  backdrop-filter: blur(16px) saturate(140%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  border: 1px solid var(--border-subtle);
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .glass {
+    background: rgba(20, 20, 24, 0.94);
+  }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .glass {
+    background: rgba(20, 20, 24, 0.96);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
+/* Restrained neon-glow, used only on risk badges and primary CTAs.
+   Neumorphism is deliberately not used as a UI language (accessibility risk). */
+.glow-gold { box-shadow: 0 0 0 1px var(--accent-gold-soft), 0 0 24px var(--accent-gold-soft); }
+.glow-low { box-shadow: 0 0 0 1px var(--risk-low-glow), 0 0 20px var(--risk-low-glow); }
+.glow-medium { box-shadow: 0 0 0 1px var(--risk-medium-glow), 0 0 20px var(--risk-medium-glow); }
+.glow-high { box-shadow: 0 0 0 1px var(--risk-high-glow), 0 0 20px var(--risk-high-glow); }
+.glow-critical { box-shadow: 0 0 0 1px var(--risk-critical-glow), 0 0 20px var(--risk-critical-glow); }
+
+/* Bento grid */
+.bento-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--space-3);
+  align-items: stretch;
+}
+
+/* Animated CSS gradient-mesh hero background, in place of a WebGL/Three.js
+   canvas: house-documented technique, zero extra dependency, transform/
+   opacity only. */
+.gradient-mesh {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: var(--bg);
+}
+.mesh-blob {
+  position: absolute;
+  width: 55vw;
+  height: 55vw;
+  border-radius: 50%;
+  filter: blur(90px);
+  opacity: 0.32;
+  will-change: transform;
+  animation: mesh-drift 26s ease-in-out infinite;
+}
+.mesh-blob-1 { background: var(--accent-gold); top: -15%; left: -10%; }
+.mesh-blob-2 { background: var(--risk-high); top: 15%; right: -18%; animation-duration: 30s; animation-delay: -8s; }
+.mesh-blob-3 { background: var(--risk-low); bottom: -25%; left: 15%; animation-duration: 34s; animation-delay: -16s; }
+
+@keyframes mesh-drift {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(6%, 8%) scale(1.08); }
+  66% { transform: translate(-5%, -6%) scale(0.95); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  .mesh-blob {
+    animation: none;
+  }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

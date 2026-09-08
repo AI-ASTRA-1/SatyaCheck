@@ -1,0 +1,23 @@
+/* Self-hosted variable fonts via @fontsource, not a CDN. Each ships with
+   font-display: swap already set. */
+@import '@fontsource-variable/playfair-display';
+@import '@fontsource-variable/outfit';
+
+/* Approximate matched fallbacks to reduce the layout shift while the variable
+   fonts load. size-adjust values below are close estimates, not measured
+   font metrics. */
+@font-face {
+  font-family: 'Playfair Display Fallback';
+  src: local('Georgia'), local('Times New Roman');
+  size-adjust: 112%;
+  ascent-override: 88%;
+  descent-override: 22%;
+}
+
+@font-face {
+  font-family: 'Outfit Fallback';
+  src: local('Arial'), local('Helvetica Neue');
+  size-adjust: 104%;
+  ascent-override: 92%;
+  descent-override: 24%;
+}
