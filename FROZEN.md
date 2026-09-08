@@ -25,7 +25,7 @@ threshold             : 0.5      evidence-label cut point only, not a decision
 preprocessing_chain   : see below
 torch_version         : 2.11.0+cu128
 frozen_at             : 2026-09-08T09:52:56+00:00
-frozen_commit         : 2c53a3e91a954e903ab847086832a0a591360c4f
+frozen_commit         : f1e83a8d0209a1acb70912dbe6e286e3a4b9763e
 ```
 
 ## Preprocessing chain, in order
@@ -134,5 +134,8 @@ git rev-parse HEAD
 ```
 
 Every CSV under `data/results/` carries `checkpoint` and `frozen_commit` columns. A
-row whose `frozen_commit` is not `2c53a3e` was produced under a different config and
+row whose `frozen_commit` is not `f1e83a8` was produced under a different config and
 must not be compared with one that was.
+
+`frozen_commit` is the commit the config was read at, which is the parent of the
+commit that adds this file. There is no way for a file to name its own commit.
