@@ -156,6 +156,11 @@ paths.** Both transports terminate at the same audio-stream interface. Enforceab
   difference is a documented codec or sample-rate property of the transport itself.
 - Adding a third acquisition layer later must require no change below stage 02. If it would,
   the boundary has already leaked.
+- A transport must never fabricate audio (padding a partial trailing frame with silence) or
+  silently drop a frame it could not decode. It reports the real, unpadded tail via
+  `AudioChunk.is_final` and any skipped frame via `StreamClose.dropped_frames`
+  (`contracts/acquisition.py`), so gaps are visible to the model and the evidence layer
+  instead of hidden inside a byte count.
 
 ### Delivery back to the user
 
