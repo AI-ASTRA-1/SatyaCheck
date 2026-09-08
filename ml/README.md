@@ -28,7 +28,7 @@ is a stub, and what the environment can currently do.
 | `eval/confidence.py` | k-NN distance from the in-domain reference, calibrated to 0 to 1. |
 | `tools/fit_confidence.py` | Fits the reference and measures how well it works. |
 | `tools/latency.py` | Per-window latency against the 180 ms stage 04 budget, CPU and GPU. |
-| `tools/correlate.py` | Regresses the score against measured channel statistics. Writes `correlation.csv` and a dependency-free `correlation.svg`. |
+| `tools/correlate.py` | Regresses the score against measured channel statistics. Writes `correlation.csv` and a matplotlib `correlation.png`. |
 | `eval/acoustics.py` | SNR, effective bandwidth, noise floor, spectral centroid, crest factor, plus Pearson and Spearman. |
 | `tools/handoff.py` | Stages the 1.2 GB the model actually needs onto another machine, and verifies it arrived. |
 | `eval/transplant.py` | `separation`, `gap`, and what each means at small n. |
@@ -1022,7 +1022,7 @@ the 522.9 ms above comes from rather than 1030.8 ms.
 Branch B, hours 4 to 6, and it is a null result. `data/results/correlation.csv`, 76
 clips across five datasets, each measured for SNR, effective bandwidth, noise floor,
 spectral centroid, crest factor, speech level and clipping, then correlated against
-`synthetic_probability`. Plot in `correlation.svg`.
+`synthetic_probability`. Plot in `correlation.png`, matplotlib.
 
 | statistic | pooled r | pooled rho | asvspoof | ifd | internal | iPhone | Samsung |
 |---|---|---|---|---|---|---|---|
@@ -1064,6 +1064,13 @@ also near zero, which makes the null cleaner rather than weaker.
 **Scope.** 76 clips, one checkpoint, five datasets of very unequal size. A null at
 this n does not prove no channel statistic could ever predict the score; it does say
 none of the five the brief names does so here.
+
+**matplotlib, added 2026-09-09 at explicit user request.** The plot was originally
+hand-written SVG because matplotlib was not installed and `AGENTS.md` forbids adding
+a dependency without asking. Asked, and installed into `.venv` directly rather than
+`pyproject.toml`, which is R2's file; same pattern already used for speechbrain.
+Raised in `QUESTIONS.md`. The numbers in `correlation.csv` did not change; only the
+plot format did.
 
 ### The integration seam for R2, 2026-09-08
 
@@ -1367,6 +1374,7 @@ therefore use `codec_name` and `CodecName`, never `codec` and `Codec`.
 | Python | 3.13.15, `.venv` built by uv 0.12.1 |
 | Installed | pydantic, pytest, ruff, mypy, numpy 2.5.3, torch 2.11.0+cu128, torchaudio 2.11.0+cu128, transformers, soundfile 0.14.0, speechbrain 1.1.1 |
 | Added 2026-09-08 | speechbrain 1.1.1 for ECAPA-TDNN, plus hyperpyyaml, joblib, scipy, sentencepiece, requests, ruamel-yaml, cloudpickle |
+| Added 2026-09-09 | matplotlib 3.11.1 for `correlate.py`'s plot, at explicit user request; pulls in pillow, fonttools, contourpy, kiwisolver, cycler, pyparsing, python-dateutil, six |
 | FLAC decoding | `soundfile`, not torchaudio. torchaudio 2.11 delegates decoding to `torchcodec`, which is a heavier dependency than reading a FLAC warrants |
 | CUDA | available, `torch.cuda.is_available()` is True and reports the 4070 |
 | `uv` | 0.12.10 at `%USERPROFILE%\.local\bin\uv.exe`. README repo state says 0.12.1 |

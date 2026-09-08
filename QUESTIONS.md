@@ -217,3 +217,21 @@ away from the constants it claims to describe.
 
 **What I need:** R2 to confirm the root is where these belong, or name a folder under
 `ml/` and I will move them. No one else's files were touched either way.
+
+## R1 (ML) - 2026-09-09 - DEPENDENCY ADDED, matplotlib, at user request
+
+**Not blocked, informational.** `pyproject.toml` is R2's file per `roles/R1.md`'s
+folder ownership, so this is not staged there. `matplotlib` (3.11.1, plus its
+transitive deps: pillow, fonttools, contourpy, kiwisolver, cycler, pyparsing,
+python-dateutil, six) was installed into `.venv` directly with
+`uv pip install --system-certs --python .venv\Scripts\python.exe matplotlib`, same
+pattern already used for speechbrain.
+
+**Why:** `ml/tools/correlate.py`'s scatter grid was hand-written SVG because
+`AGENTS.md` forbids adding a dependency without asking and matplotlib was absent.
+The user then explicitly asked for matplotlib to be installed and used, so it was.
+Verified `torch.__version__` and `torch.cuda.is_available()` unchanged before and
+after the install.
+
+**What I need:** if `pyproject.toml` should record this for reproducible installs on
+another machine, that's a change to R2's file. Happy to propose the diff if wanted.

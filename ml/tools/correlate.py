@@ -18,8 +18,8 @@ Domain distance is included as a comparison column. It is not a channel statisti
 is there because the transplant already showed it dominates, and a channel statistic
 that cannot beat it is not worth building an augmentation around.
 
-Writes `data/results/correlation.csv`, one row per clip, and a dependency-free
-`data/results/correlation.svg` scatter grid.
+Writes `data/results/correlation.csv`, one row per clip, and a matplotlib scatter
+grid at `data/results/correlation.png`.
 """
 
 from __future__ import annotations
@@ -171,8 +171,19 @@ def report(rows: list[dict[str, object]]) -> None:
     )
 
 
-def svg(rows: list[dict[str, object]], path: Path) -> Path:
-    """A scatter grid, written by hand. No plotting dependency is installed."""
+def plot(rows: list[dict[str, object]], path: Path) -> Path:
+    """A scatter grid, one panel per statistic, coloured by dataset.
+
+    matplotlib, installed 2026-09-09 at the user's explicit request (it was absent
+    before; see the git history for the hand-written SVG this replaced). Not added
+    to `pyproject.toml`, which is R2's file; installed into `.venv` directly, same
+    pattern already used for speechbrain, and raised in `QUESTIONS.md`.
+    """
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
     colours = {
         "asvspoof": "#2c6fbb",
         "ifd": "#d1721f",
@@ -180,67 +191,44 @@ def svg(rows: list[dict[str, object]], path: Path) -> Path:
         "replay_iphone": "#3f8f5a",
         "replay_samsung": "#6b4fa8",
     }
-    cols, panel, pad = 3, 210, 46
+    datasets = [d for d in colours if any(r["dataset"] == d for r in rows)]
+
+    cols = 3
     rows_n = (len(COLUMNS) + cols - 1) // cols
-    width = cols * (panel + pad) + pad
-    height = rows_n * (panel + pad) + pad + 46
-
-    open_tag = (
-        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
-        f'viewBox="0 0 {width} {height}" font-family="system-ui,sans-serif">'
+    fig, axes = plt.subplots(
+        rows_n, cols, figsize=(4.2 * cols, 3.2 * rows_n), squeeze=False
     )
-    parts = [open_tag, f'<rect width="{width}" height="{height}" fill="#fdfdfc"/>']
+    fig.suptitle(
+        "synthetic_probability vs. measured channel statistics, "
+        "colour = dataset (see ml/README.md for the read)",
+        fontsize=10,
+    )
+
     for index, column in enumerate(COLUMNS):
-        cx = pad + (index % cols) * (panel + pad)
-        cy = pad + (index // cols) * (panel + pad)
-        values = np.array([float(r[column]) for r in rows])
-        low, high = float(values.min()), float(values.max())
-        span = (high - low) or 1.0
-        parts.append(
-            f'<rect x="{cx}" y="{cy}" width="{panel}" height="{panel}" fill="#fff" '
-            f'stroke="#ccc"/>'
-        )
-        parts.append(
-            f'<text x="{cx}" y="{cy - 8}" font-size="11" fill="#222">{column}</text>'
-        )
-        for row in rows:
-            px = cx + (float(row[column]) - low) / span * panel
-            py = cy + panel - float(row["score"]) * panel
-            colour = colours.get(str(row["dataset"]), "#888")
-            parts.append(
-                f'<circle cx="{px:.1f}" cy="{py:.1f}" r="2.6" fill="{colour}" '
-                f'fill-opacity="0.72"/>'
-            )
+        ax = axes[index // cols][index % cols]
+        for dataset in datasets:
+            subset = [r for r in rows if r["dataset"] == dataset]
+            if not subset:
+                continue
+            x = [float(r[column]) for r in subset]
+            y = [float(r["score"]) for r in subset]
+            ax.scatter(x, y, s=16, alpha=0.75, color=colours[dataset], label=dataset)
         r, _ = correlations(rows, column)
-        parts.append(
-            f'<text x="{cx + 4}" y="{cy + 13}" font-size="10" fill="#666">'
-            f"r={r:+.2f}</text>"
-        )
-        parts.append(
-            f'<text x="{cx - 6}" y="{cy + panel}" font-size="9" fill="#888" '
-            f'text-anchor="end">0</text>'
-        )
-        parts.append(
-            f'<text x="{cx - 6}" y="{cy + 8}" font-size="9" fill="#888" '
-            f'text-anchor="end">1</text>'
-        )
+        title = column + (" (not a channel statistic)" if column == "confidence" else "")
+        ax.set_title(f"{title}\npooled r={r:+.2f}", fontsize=9)
+        ax.set_ylim(-0.05, 1.05)
+        ax.tick_params(labelsize=7)
 
-    legend_y = height - 18
-    x = pad
-    for dataset, colour in colours.items():
-        parts.append(f'<circle cx="{x}" cy="{legend_y - 4}" r="4" fill="{colour}"/>')
-        parts.append(
-            f'<text x="{x + 9}" y="{legend_y}" font-size="11" fill="#333">{dataset}</text>'
-        )
-        x += 24 + len(dataset) * 6.6
-    parts.append(
-        f'<text x="{pad}" y="{legend_y - 20}" font-size="11" fill="#555">'
-        "y axis is synthetic_probability, 0 at the bottom</text>"
-    )
-    parts.append("</svg>")
+    for index in range(len(COLUMNS), rows_n * cols):
+        axes[index // cols][index % cols].axis("off")
+
+    handles, labels = axes[0][0].get_legend_handles_labels()
+    fig.legend(handles, labels, loc="lower center", ncol=len(datasets), fontsize=8)
+    fig.tight_layout(rect=(0, 0.04, 1, 0.95))
 
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text("\n".join(parts) + "\n", encoding="utf-8")
+    fig.savefig(path, dpi=150)
+    plt.close(fig)
     return path
 
 
@@ -269,8 +257,8 @@ def main(argv: list[str] | None = None) -> int:
     print(f"\nwrote {len(rows)} rows to {args.out}")
 
     report(rows)
-    plot = svg(rows, args.out.with_suffix(".svg"))
-    print(f"\nwrote {plot}")
+    figure = plot(rows, args.out.with_suffix(".png"))
+    print(f"\nwrote {figure}")
     print(
         "\nA pooled correlation across these corpora is confounded: any statistic\n"
         "that differs between ASVspoof and phone audio correlates with the score for\n"
