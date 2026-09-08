@@ -411,3 +411,48 @@ class WebRTCAdapter:
         self._sessions.clear()
         self._is_connected = False
         logger.info("WebRTCAdapter closed.")
+
+
+def main() -> None:
+    """Entrypoint for running the audio ingest server standalone."""
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="WebRTC Audio Ingest WebSocket Server",
+    )
+    parser.add_argument(
+        "--host", type=str, default="0.0.0.0", help="Bind host (default: 0.0.0.0)",
+    )
+    parser.add_argument(
+        "--port", type=int, default=8767, help="Bind port (default: 8767)",
+    )
+    parser.add_argument(
+        "--log-level", type=str, default="INFO", help="Logging level",
+    )
+    args = parser.parse_args()
+
+    logging.basicConfig(
+        level=getattr(logging, args.log_level.upper(), logging.INFO),
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    )
+
+    adapter = WebRTCAdapter()
+
+    async def run() -> None:
+        await adapter.serve_audio_ingest(host=args.host, port=args.port)
+        try:
+            await asyncio.Future()
+        except (asyncio.CancelledError, KeyboardInterrupt):
+            pass
+        finally:
+            await adapter.close_ingest()
+
+    try:
+        asyncio.run(run())
+    except KeyboardInterrupt:
+        logger.info("Audio ingest server stopped by user.")
+
+
+if __name__ == "__main__":
+    main()
+

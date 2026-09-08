@@ -33,17 +33,31 @@ export function useSignalling() {
     null
   );
   const wsRef = useRef<WebSocket | null>(null);
+  const queueRef = useRef<AppToServerMessage[]>([]);
 
   const connect = useCallback(() => {
-    if (wsRef.current) {
-      wsRef.current.close();
+    if (
+      wsRef.current &&
+      (wsRef.current.readyState === WebSocket.OPEN ||
+        wsRef.current.readyState === WebSocket.CONNECTING)
+    ) {
+      return;
     }
+
     setSigState("connecting");
 
     const ws = new WebSocket(SIGNALLING_URL);
     wsRef.current = ws;
 
-    ws.onopen = () => setSigState("connected");
+    ws.onopen = () => {
+      setSigState("connected");
+      while (queueRef.current.length > 0) {
+        const msg = queueRef.current.shift();
+        if (msg) {
+          ws.send(JSON.stringify(msg));
+        }
+      }
+    };
 
     ws.onmessage = (event: MessageEvent) => {
       let msg: ServerToAppMessage;
@@ -62,13 +76,32 @@ export function useSignalling() {
     };
   }, []);
 
-  const send = useCallback((msg: AppToServerMessage) => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify(msg));
-    }
-  }, []);
+  const send = useCallback(
+    (msg: AppToServerMessage) => {
+      console.log(
+        "[useSignalling] send requested:",
+        msg.type,
+        "ws state:",
+        wsRef.current?.readyState
+      );
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify(msg));
+        console.log("[useSignalling] sent immediately:", msg.type);
+      } else if (wsRef.current?.readyState === WebSocket.CONNECTING) {
+        console.log("[useSignalling] queued while connecting:", msg.type);
+        queueRef.current.push(msg);
+      } else {
+        console.log("[useSignalling] queued and connecting:", msg.type);
+        queueRef.current.push(msg);
+        connect();
+      }
+    },
+    [connect]
+  );
+
 
   const disconnect = useCallback(() => {
+    queueRef.current = [];
     wsRef.current?.close();
     wsRef.current = null;
     setSigState("disconnected");
@@ -83,3 +116,4 @@ export function useSignalling() {
 
   return { sigState, lastMessage, connect, send, disconnect };
 }
+

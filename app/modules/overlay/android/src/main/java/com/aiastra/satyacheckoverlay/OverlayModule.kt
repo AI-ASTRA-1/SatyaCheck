@@ -1,6 +1,9 @@
 package com.aiastra.satyacheckoverlay
 
+import android.content.Context
 import android.content.Intent
+import android.media.AudioDeviceInfo
+import android.media.AudioManager
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
@@ -10,17 +13,12 @@ import expo.modules.kotlin.modules.ModuleDefinition
 /**
  * SatyacheckOverlay native module.
  *
- * Exposes four synchronous functions to JavaScript:
+ * Exposes synchronous functions to JavaScript:
  *   isPermissionGranted() -> Boolean
  *   requestPermission()   -> Unit  (opens system settings screen)
  *   showOverlay(score, riskLevel, verdict) -> Unit
  *   hideOverlay()         -> Unit
- *
- * showOverlay starts (or updates) OverlayService, which draws the
- * TYPE_APPLICATION_OVERLAY window using WindowManager.
- * hideOverlay stops the service and removes the window.
- *
- * The overlay is display-only. It never blocks, mutes, or ends a call.
+ *   setSpeakerphoneOn(enabled) -> Unit (routes call audio to loudspeaker)
  */
 class OverlayModule : Module() {
 
@@ -81,6 +79,28 @@ class OverlayModule : Module() {
             val ctx = appContext.reactContext
             if (ctx != null) {
                 ctx.stopService(Intent(ctx, OverlayService::class.java))
+            }
+        }
+
+        // Routes in-call audio to the loudspeaker instead of earpiece.
+        Function("setSpeakerphoneOn") { enabled: Boolean ->
+            val ctx = appContext.reactContext ?: return@Function
+            val audioManager = ctx.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return@Function
+            audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                if (enabled) {
+                    val speakerDevice = audioManager.availableCommunicationDevices.firstOrNull {
+                        it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER
+                    }
+                    if (speakerDevice != null) {
+                        audioManager.setCommunicationDevice(speakerDevice)
+                    }
+                } else {
+                    audioManager.clearCommunicationDevice()
+                }
+            } else {
+                @Suppress("DEPRECATION")
+                audioManager.isSpeakerphoneOn = enabled
             }
         }
     }

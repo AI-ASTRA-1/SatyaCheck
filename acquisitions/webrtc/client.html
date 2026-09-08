@@ -106,6 +106,18 @@
       <label for="callId">Call ID:</label>
       <input type="text" id="callId" value="demo-call-001">
     </div>
+    <div class="form-group" id="audioSourceGroup">
+      <label for="audioSource">Audio Source (Phone A):</label>
+      <select id="audioSource">
+        <option value="tone" selected>440Hz Test Beep (Synthetic Tone - Guaranteed Audio)</option>
+        <option value="mic">Microphone (Live Speech)</option>
+      </select>
+    </div>
+    <div class="form-group" style="display:flex; align-items:center; gap:8px;">
+      <label style="margin-bottom:0;">Input Level:</label>
+      <meter id="micMeter" min="0" max="100" low="15" high="70" optimum="50" value="0" style="flex:1; height:20px;"></meter>
+      <span id="micMeterVal" style="font-size:12px; color:#64748b; min-width:32px;">0%</span>
+    </div>
     <div style="margin-top: 10px;">
       Status: <span id="statusBadge" class="status-badge">Idle</span>
     </div>
@@ -113,6 +125,7 @@
       <button id="actionBtn" class="btn-primary" onclick="handlePrimaryAction()">Connect Receiver</button>
       <button id="hangupBtn" class="btn-danger" onclick="hangup()" disabled>Hang Up</button>
     </div>
+    <audio id="remoteAudio" autoplay playsinline style="display:none;"></audio>
   </div>
 
   <div class="log-box" id="logBox"></div>
@@ -161,15 +174,64 @@
       }
     }
 
+    let meterInterval = null;
+    let audioCtx = null;
+
+    function setupMicMeter(stream) {
+      try {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const src = audioCtx.createMediaStreamSource(stream);
+        const analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 256;
+        src.connect(analyser);
+        const data = new Uint8Array(analyser.frequencyBinCount);
+        const meter = document.getElementById("micMeter");
+        const val = document.getElementById("micMeterVal");
+        meterInterval = setInterval(() => {
+          analyser.getByteFrequencyData(data);
+          let sum = 0;
+          for (let i = 0; i < data.length; i++) sum += data[i];
+          const avg = Math.min(100, Math.round((sum / data.length) * 2));
+          if (meter) meter.value = avg;
+          if (val) val.innerText = avg + "%";
+        }, 100);
+      } catch (e) {
+        log("Meter note: " + e.message);
+      }
+    }
+
+    function createToneStream() {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = audioCtx.createOscillator();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(440, audioCtx.currentTime);
+      const dst = audioCtx.createMediaStreamDestination();
+      osc.connect(dst);
+      osc.start();
+      const meter = document.getElementById("micMeter");
+      const val = document.getElementById("micMeterVal");
+      if (meter) meter.value = 80;
+      if (val) val.innerText = "80% (Tone Active)";
+      return dst.stream;
+    }
+
     async function startCallerFlow(sigUrl, callId) {
       log(`[Phone A] Connecting to signalling broker at ${sigUrl}...`);
       sigWs = new WebSocket(sigUrl);
 
       sigWs.onopen = async () => {
-        log("[Phone A] Signalling connected. Acquiring microphone...");
+        log("[Phone A] Signalling connected. Preparing audio source...");
         try {
-          localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-          log("[Phone A] Microphone acquired. Creating WebRTC PeerConnection...");
+          const source = document.getElementById("audioSource").value;
+          if (source === "tone") {
+            localStream = createToneStream();
+            log("[Phone A] 440Hz continuous test tone generated.");
+          } else {
+            localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+            log("[Phone A] Microphone acquired.");
+            setupMicMeter(localStream);
+          }
+          log("[Phone A] Creating WebRTC PeerConnection...");
 
           pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] });
 
@@ -177,12 +239,21 @@
 
           pc.onicecandidate = (evt) => {
             if (evt.candidate && sigWs && sigWs.readyState === WebSocket.OPEN) {
+              log("[Phone A] Local ICE candidate generated, sending to signalling...");
               sigWs.send(JSON.stringify({
                 type: "ice",
                 call_id: callId,
                 candidate: evt.candidate
               }));
             }
+          };
+
+          pc.oniceconnectionstatechange = () => {
+            log(`[Phone A] ICE State changed: ${pc.iceConnectionState}`);
+          };
+
+          pc.onconnectionstatechange = () => {
+            log(`[Phone A] Connection State changed: ${pc.connectionState}`);
           };
 
           const offer = await pc.createOffer();
@@ -204,6 +275,8 @@
         }
       };
 
+      const pendingRemoteIceA = [];
+
       sigWs.onmessage = async (evt) => {
         const msg = JSON.parse(evt.data);
         log(`[Phone A] Rx signalling: ${msg.type}`);
@@ -214,12 +287,20 @@
         } else if (msg.type === "answer") {
           log("[Phone A] Received SDP answer from Phone B! Applying remote description...");
           await pc.setRemoteDescription(new RTCSessionDescription({ type: "answer", sdp: msg.sdp }));
+          while (pendingRemoteIceA.length > 0) {
+            const cand = pendingRemoteIceA.shift();
+            log("[Phone A] Flushing buffered remote ICE candidate...");
+            await pc.addIceCandidate(new RTCIceCandidate(cand));
+          }
           log("[Phone A] Remote description set. WebRTC P2P Call Connected!");
           setStatus("In Call (P2P Active)", "active");
         } else if (msg.type === "ice") {
-          if (pc && msg.candidate) {
-            log("[Phone A] Received remote ICE candidate from Phone B.");
+          if (pc && pc.remoteDescription && msg.candidate) {
+            log("[Phone A] Received remote ICE candidate from Phone B. Adding...");
             await pc.addIceCandidate(new RTCIceCandidate(msg.candidate));
+          } else if (msg.candidate) {
+            log("[Phone A] Buffering remote ICE candidate until answer is applied...");
+            pendingRemoteIceA.push(msg.candidate);
           }
         } else if (msg.type === "call_ended") {
           log("[Phone A] Call ended signal received.");
@@ -245,6 +326,8 @@
         document.getElementById("hangupBtn").disabled = false;
       };
 
+      const pendingRemoteIceB = [];
+
       sigWs.onmessage = async (evt) => {
         const msg = JSON.parse(evt.data);
         log(`[Phone B] Rx signalling: ${msg.type}`);
@@ -258,6 +341,7 @@
 
           pc.onicecandidate = (evt) => {
             if (evt.candidate && sigWs && sigWs.readyState === WebSocket.OPEN) {
+              log("[Phone B] Local ICE candidate generated, sending to signalling...");
               sigWs.send(JSON.stringify({
                 type: "ice",
                 call_id: currentCallId,
@@ -266,12 +350,31 @@
             }
           };
 
+          pc.oniceconnectionstatechange = () => {
+            log(`[Phone B] ICE State changed: ${pc.iceConnectionState}`);
+          };
+
+          pc.onconnectionstatechange = () => {
+            log(`[Phone B] Connection State changed: ${pc.connectionState}`);
+          };
+
           pc.ontrack = (evt) => {
             log("[Phone B] Remote audio track received! Starting audio forwarding to SatyaCheck backend (port 8767)...");
+            const audioEl = document.getElementById("remoteAudio");
+            if (audioEl && evt.streams && evt.streams[0]) {
+              audioEl.srcObject = evt.streams[0];
+              audioEl.play().catch(e => log("[Phone B] Audio play error: " + e.message));
+            }
             connectAudioIngest(currentCallId);
           };
 
           await pc.setRemoteDescription(new RTCSessionDescription({ type: "offer", sdp: msg.sdp }));
+          while (pendingRemoteIceB.length > 0) {
+            const cand = pendingRemoteIceB.shift();
+            log("[Phone B] Flushing buffered remote ICE candidate...");
+            await pc.addIceCandidate(new RTCIceCandidate(cand));
+          }
+
           const answer = await pc.createAnswer();
           await pc.setLocalDescription(answer);
 
@@ -284,9 +387,12 @@
 
           setStatus("In Call (Forwarding Audio)", "active");
         } else if (msg.type === "ice") {
-          if (pc && msg.candidate) {
-            log("[Phone B] Received remote ICE candidate from Phone A.");
+          if (pc && pc.remoteDescription && msg.candidate) {
+            log("[Phone B] Received remote ICE candidate from Phone A. Adding...");
             await pc.addIceCandidate(new RTCIceCandidate(msg.candidate));
+          } else if (msg.candidate) {
+            log("[Phone B] Buffering remote ICE candidate until offer is applied...");
+            pendingRemoteIceB.push(msg.candidate);
           }
         } else if (msg.type === "call_ended") {
           log("[Phone B] Call ended signal received.");
@@ -343,6 +449,18 @@
         sigWs.close();
         sigWs = null;
       }
+      if (meterInterval) {
+        clearInterval(meterInterval);
+        meterInterval = null;
+      }
+      if (audioCtx) {
+        audioCtx.close().catch(() => {});
+        audioCtx = null;
+      }
+      const meter = document.getElementById("micMeter");
+      const val = document.getElementById("micMeterVal");
+      if (meter) meter.value = 0;
+      if (val) val.innerText = "0%";
       log("Call terminated.");
       setStatus("Disconnected");
       document.getElementById("actionBtn").disabled = false;

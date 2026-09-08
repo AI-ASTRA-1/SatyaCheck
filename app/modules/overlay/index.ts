@@ -46,3 +46,15 @@ export function showOverlay(
 export function hideOverlay(): void {
   OverlayModule.hideOverlay();
 }
+
+/**
+ * Routes call audio to the device loudspeaker (speakerphone).
+ */
+export function setSpeakerphoneOn(enabled: boolean): void {
+  try {
+    OverlayModule.setSpeakerphoneOn(enabled);
+  } catch {
+    // Non-fatal if native module not ready
+  }
+}
+

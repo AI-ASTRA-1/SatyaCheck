@@ -33,6 +33,7 @@ import {
 } from "react-native-webrtc";
 import { AUDIO_INGEST_URL } from "../config";
 import { useSignalling } from "./useSignalling";
+import { setSpeakerphoneOn } from "satyacheck-overlay";
 
 // ---- Call state machine --------------------------------------------------
 
@@ -68,30 +69,64 @@ export function useWebRTCCall() {
   const localStreamRef = useRef<MediaStream | null>(null);
   const ingestWsRef = useRef<WebSocket | null>(null);
   const incomingOfferRef = useRef<string>("");
-
+  const callIdRef = useRef<string>("");
+  const roleRef = useRef<CallRole | null>(null);
+  const pendingRemoteIceRef = useRef<RTCIceCandidate[]>([]);
 
   // ---- Helpers -----------------------------------------------------------
+
+  function flushPendingRemoteIce(pc: RTCPeerConnection) {
+    while (pendingRemoteIceRef.current.length > 0) {
+      const cand = pendingRemoteIceRef.current.shift();
+      if (cand) {
+        console.log("[useWebRTCCall] Flushing buffered remote ICE candidate");
+        pc.addIceCandidate(cand).catch((e) =>
+          console.warn("[useWebRTCCall] Failed to add buffered ICE candidate:", e)
+        );
+      }
+    }
+  }
 
   function makePeerConnection() {
     const pc = new RTCPeerConnection(RTC_CONFIG);
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     pc.onicecandidate = (event: any) => {
-      if (event.candidate && callState.status !== "idle") {
-        const callId =
-          "callId" in callState ? callState.callId : "";
-        send({ type: "ice", call_id: callId, candidate: event.candidate.toJSON() });
+      if (event.candidate && callIdRef.current) {
+        console.log("[useWebRTCCall] Local ICE candidate generated for", callIdRef.current);
+        send({
+          type: "ice",
+          call_id: callIdRef.current,
+          candidate: event.candidate.toJSON(),
+        });
       }
+    };
+
+    pc.oniceconnectionstatechange = () => {
+      console.log("[useWebRTCCall] ICE connection state:", pc.iceConnectionState);
+    };
+
+    pc.onconnectionstatechange = () => {
+      console.log("[useWebRTCCall] Connection state:", pc.connectionState);
     };
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     pc.ontrack = (event: any) => {
+      console.log("[useWebRTCCall] Remote track received, kind:", event.track?.kind);
+      if (event.track) {
+        event.track.enabled = true;
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (event.track as any)._setVolume(10.0);
+          console.log("[useWebRTCCall] Audio track volume set to 10.0 (max gain)");
+        } catch (e) {
+          console.log("[useWebRTCCall] _setVolume note:", e);
+        }
+      }
       // Receiver only: remote track = caller's voice. Tap it to backend.
-      if (role === "receiver") {
+      if (roleRef.current === "receiver") {
         forwardAudioToBackend();
       }
-      // We intentionally do not play the remote track to the local speaker here.
-      // If you want earpiece playback, attach event.streams[0] to an RTCView.
     };
 
     return pc;
@@ -102,23 +137,17 @@ export function useWebRTCCall() {
    * Subsequent binary frames (raw Opus) are sent by the native WebRTC stack
    * automatically once the track is attached -- this connection is the
    * channel the backend adapter listens on.
-   *
-   * Note: actual frame-by-frame forwarding relies on the native WebRTC
-   * audio pipeline feeding the ingest socket. The hook sets up the channel;
-   * the friend's adapter reads from it.
    */
   function forwardAudioToBackend() {
-    const callId =
-      callState.status === "active" || callState.status === "ringing"
-        ? callState.callId
-        : "";
+    const callId = callIdRef.current;
     if (!callId) return;
 
+    console.log("[useWebRTCCall] Connecting to Audio Ingest WS at:", AUDIO_INGEST_URL);
     const ws = new WebSocket(AUDIO_INGEST_URL);
     ingestWsRef.current = ws;
 
     ws.onopen = () => {
-      // Send JSON handshake first, then the native WebRTC audio pump sends binary frames.
+      console.log("[useWebRTCCall] Audio Ingest WS connected. Sending JSON handshake...");
       ws.send(
         JSON.stringify({
           call_id: callId,
@@ -129,19 +158,23 @@ export function useWebRTCCall() {
       );
     };
 
-    ws.onerror = () => {
-      // Degraded: no analysis. Call audio continues unaffected.
+    ws.onerror = (e) => {
+      console.warn("[useWebRTCCall] Audio Ingest WS error:", e);
       ingestWsRef.current = null;
     };
   }
 
   function cleanup() {
+    setSpeakerphoneOn(false);
+    pendingRemoteIceRef.current = [];
     localStreamRef.current?.getTracks().forEach((t) => t.stop());
     localStreamRef.current = null;
     pcRef.current?.close();
     pcRef.current = null;
     ingestWsRef.current?.close();
     ingestWsRef.current = null;
+    callIdRef.current = "";
+    roleRef.current = null;
   }
 
   // ---- Caller: dial() ----------------------------------------------------
@@ -149,30 +182,39 @@ export function useWebRTCCall() {
   const dial = useCallback(
     async (callId: string) => {
       if (callState.status !== "idle") return;
+      roleRef.current = "caller";
+      callIdRef.current = callId;
       setRole("caller");
       setCallState({ status: "dialling", callId });
 
-      // Connect to signalling server first.
-      connectSignalling();
+      try {
+        // Connect to signalling server first.
+        connectSignalling();
 
-      // Acquire mic.
-      const stream = await mediaDevices.getUserMedia({ audio: true, video: false });
-      localStreamRef.current = stream as MediaStream;
+        // Acquire mic.
+        const stream = await mediaDevices.getUserMedia({ audio: true, video: false });
+        localStreamRef.current = stream as MediaStream;
 
-      const pc = makePeerConnection();
-      pcRef.current = pc;
-      (stream as MediaStream).getTracks().forEach((track) =>
-        pc.addTrack(track, stream as MediaStream)
-      );
+        const pc = makePeerConnection();
+        pcRef.current = pc;
+        (stream as MediaStream).getTracks().forEach((track) =>
+          pc.addTrack(track, stream as MediaStream)
+        );
 
-      const offer = await pc.createOffer({});
-      await pc.setLocalDescription(offer as RTCSessionDescription);
+        const offer = await pc.createOffer({});
+        await pc.setLocalDescription(offer as RTCSessionDescription);
 
-      send({
-        type: "dial",
-        call_id: callId,
-        sdp: (offer as RTCSessionDescription).sdp ?? "",
-      });
+        send({
+          type: "dial",
+          call_id: callId,
+          sdp: (offer as RTCSessionDescription).sdp ?? "",
+        });
+      } catch (err) {
+        console.error("dial error:", err);
+        cleanup();
+        setCallState({ status: "ended", callId, reason: "dial failed: " + String(err) });
+        setRole(null);
+      }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [callState.status, connectSignalling, send]
@@ -183,29 +225,41 @@ export function useWebRTCCall() {
   const accept = useCallback(
     async (callId: string, offerSdp?: string) => {
       const sdp = offerSdp || incomingOfferRef.current;
+      roleRef.current = "receiver";
+      callIdRef.current = callId;
       setRole("receiver");
       setCallState({ status: "active", callId });
 
-      const stream = await mediaDevices.getUserMedia({ audio: true, video: false });
-      localStreamRef.current = stream as MediaStream;
+      try {
+        const stream = await mediaDevices.getUserMedia({ audio: true, video: false });
+        localStreamRef.current = stream as MediaStream;
 
-      const pc = makePeerConnection();
-      pcRef.current = pc;
-      (stream as MediaStream).getTracks().forEach((track) =>
-        pc.addTrack(track, stream as MediaStream)
-      );
+        const pc = makePeerConnection();
+        pcRef.current = pc;
+        (stream as MediaStream).getTracks().forEach((track) =>
+          pc.addTrack(track, stream as MediaStream)
+        );
 
-      await pc.setRemoteDescription(
-        new RTCSessionDescription({ type: "offer", sdp })
-      );
-      const answer = await pc.createAnswer();
-      await pc.setLocalDescription(answer as RTCSessionDescription);
+        await pc.setRemoteDescription(
+          new RTCSessionDescription({ type: "offer", sdp })
+        );
+        flushPendingRemoteIce(pc);
 
-      send({
-        type: "accept",
-        call_id: callId,
-        sdp: (answer as RTCSessionDescription).sdp ?? "",
-      });
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer as RTCSessionDescription);
+
+        send({
+          type: "accept",
+          call_id: callId,
+          sdp: (answer as RTCSessionDescription).sdp ?? "",
+        });
+        setSpeakerphoneOn(true);
+      } catch (err) {
+        console.error("accept error:", err);
+        cleanup();
+        setCallState({ status: "ended", callId, reason: "accept failed: " + String(err) });
+        setRole(null);
+      }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [send]
@@ -231,12 +285,15 @@ export function useWebRTCCall() {
 
     switch (lastMessage.type) {
       case "ringing":
+        callIdRef.current = lastMessage.call_id;
         setCallState({ status: "ringing", callId: lastMessage.call_id });
         break;
 
       case "incoming_call":
         // Receiver: show incoming call UI. Accept is triggered by the user pressing Accept.
         incomingOfferRef.current = lastMessage.sdp;
+        roleRef.current = "receiver";
+        callIdRef.current = lastMessage.call_id;
         setRole("receiver");
         setCallState({ status: "ringing", callId: lastMessage.call_id });
         break;
@@ -249,19 +306,31 @@ export function useWebRTCCall() {
               new RTCSessionDescription({ type: "answer", sdp: lastMessage.sdp })
             )
             .then(() => {
-              if (callState.status === "dialling" || callState.status === "ringing") {
-                setCallState({ status: "active", callId: (callState as { callId: string }).callId });
+              if (pcRef.current) {
+                flushPendingRemoteIce(pcRef.current);
               }
+              setCallState({ status: "active", callId: callIdRef.current });
+              setSpeakerphoneOn(true);
             })
-            .catch(() => {/* setRemoteDescription failed -- call stays in ringing */});
+            .catch((e) => {
+              console.warn("[useWebRTCCall] setRemoteDescription error:", e);
+            });
         }
         break;
 
       case "ice":
-        if (pcRef.current && lastMessage.candidate) {
-          pcRef.current
-            .addIceCandidate(new RTCIceCandidate(lastMessage.candidate))
-            .catch(() => {/* non-fatal */});
+        if (lastMessage.candidate) {
+          const cand = new RTCIceCandidate(lastMessage.candidate);
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const hasRemoteDesc = Boolean((pcRef.current as any)?.remoteDescription);
+          if (pcRef.current && hasRemoteDesc) {
+            pcRef.current
+              .addIceCandidate(cand)
+              .catch((e) => console.warn("[useWebRTCCall] addIceCandidate error:", e));
+          } else {
+            console.log("[useWebRTCCall] Buffering remote ICE candidate before remoteDescription");
+            pendingRemoteIceRef.current.push(cand);
+          }
         }
         break;
 
@@ -271,7 +340,6 @@ export function useWebRTCCall() {
         setCallState({ status: "ended", callId: lastMessage.call_id, reason: "remote hangup" });
         setRole(null);
         break;
-
 
       case "error":
         cleanup();
