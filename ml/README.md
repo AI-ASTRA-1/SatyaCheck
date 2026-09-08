@@ -10,7 +10,7 @@ is a stub, and what the environment can currently do.
 | `checks/machine_fingerprint/` | Check layer plus two scorers: `SslAasistScorer` (XLS-R + AASIST, the architecture the deck describes, default) and `AasistScorer` (AASIST alone, CPU comparison). Runs end to end through `ml/tools/score_file.py`. Neither pretrained checkpoint discriminates on our audio yet; see Findings. |
 | `checks/speaker_identity/` | Docstring only. Probed but not built: `ml/tools/speaker_probe.py` measures ECAPA-TDNN cosine similarity, and the answer was that it does not separate our clone from its target. See Findings before spending effort here. |
 | `checks/prosody/` | Docstring only. |
-| `checks/stt_llm/` | Docstring only. |
+| `checks/stt_llm/` | Round 2 spike, evidence channel wired end to end. `check.py` is `SttLlmCheck` (implements `contracts.checks.Check`): transcribe the batch, run `analyze()`, emit `SttLlmSignal(script_risk, script_category)`; short window or thin transcript is SKIPPED, a transcriber error is FAILED with no signal. The transcript is a local var in `run()`, discarded on return. `asr.py` is the `Transcriber` seam plus `FasterWhisperTranscriber` (faster-whisper small, English pinned, greedy, VAD on, `condition_on_previous_text` off; loads on CUDA float16 or CPU int8, local weights only). `llm.py` is the `ScriptLLM` seam, system prompt and defensive JSON parser feeding an llm-to-rules-to-none chain that never raises and never guesses mid-range. `tactics.py` is the rules scorer (stdlib only): five tactic scores plus an `intent` in [0, 1] with a refusal/disclaimer strip for Exotel's mixed mono stream. On the 20 hand-written transcripts in `eval_transcripts.py`, rules `intent` separates cleanly: scam 0.83 to 1.00, ordinary 0.00 to 0.33 (n=20, one author, English only). The evidence threshold (0.5) is provisional and uncalibrated. `ml/tools/transcribe_file.py` runs a wav through the check window by window. ASR survives G.711 and AMR-NB but not the 8 kb/s mp3 export, and the English language pin breaks on the non-English real calls; see Findings. Tests: `test_stt_llm_script.py`, `test_stt_llm_llm.py`, `test_stt_llm_check.py`. Not built: the rolling transcript buffer (stage 03, R2's folder) and the concrete local LLM client. |
 | `runner/` | Docstring only. Owned by R2, not R1. |
 | `augment/` | Built and tested: G.711 mu-law/A-law in numpy, AMR-NB and Opus via ffmpeg, random gain, dynamic range compression, noise at controlled SNR. |
 | `train/` | Built and tested: ASVspoof 2019 LA dataset with the phone channel applied per epoch, fine-tuning loop, EER. |
@@ -64,6 +64,17 @@ The file must be 16 kHz mono 16-bit PCM. Anything else and the tool prints the
 ffmpeg command that converts it. The tool builds a real `CanonicalAudioBatch` and
 goes through `MachineFingerprintCheck`, so it exercises the pipeline path rather
 than calling the model directly.
+
+Transcribe a wav through the real `SttLlmCheck`, window by window:
+
+```
+.venv\Scripts\python.exe -m ml.tools.transcribe_file call.16k.wav --show-transcript
+.venv\Scripts\python.exe -m ml.tools.transcribe_file call.16k.wav --window-ms 45000
+```
+
+Same 16 kHz mono 16-bit PCM requirement. It prints status, `script_risk` and the
+top tactic per window; `--show-transcript` also prints the text, which the check
+itself discards. Debug tool, nothing persisted.
 
 Speaker embeddings, for the identity check rather than the fingerprint check:
 
@@ -455,6 +466,49 @@ alert.
 This happens to align with the privacy rule already in `AGENTS.md`, that there are no
 call recordings at rest and analysis is in-flight. The architecture that keeps us
 compliant is also the only one on which this check functions.
+
+### ASR (stt_llm) survives telephony codecs but not the 8 kb/s export, 2026-09-08
+
+faster-whisper `small` through the real `SttLlmCheck`, one script per condition,
+`--window-ms 30000`. Anecdote, n=1 speaker for the clean rows, n=2 real calls.
+
+| Audio | Transcript quality |
+|---|---|
+| `spk_01_source`, clean 16 kHz studio English | near perfect, read-script recovered verbatim |
+| same source through **G.711 mu-law 8 kHz** (the live-stream channel) | near perfect, indistinguishable from clean |
+| same source through G.711 mu-law and AMR-NB | near perfect |
+| `exotel_call_1` / `_2`, real calls, **8 kb/s mp3 export** upsampled to 16 kHz | unusable: repetition-loop hallucination ("I am a star" x15), invented names |
+
+**Same split as the fingerprint model.** G.711 at 64 kb/s is transparent to STT
+just as it is to the detector; the 8 kb/s mp3 export destroys both. The engineering
+rule already in this file, feed the check the stream and never a low-bitrate export,
+carries over to stt_llm unchanged.
+
+**Two issues this surfaced that are not the codec.**
+
+1. **`language="en"` is pinned and the real calls are not English.** They are
+   code-switched Kannada / Telugu, and forcing English produces romanised nonsense
+   regardless of bitrate. **Decided 2026-09-08: English only for this round.** The
+   pin stays; auto-detect flips language mid-call on Hinglish and each flip changes
+   transcript style, and multilingual STT is out of scope for now. No multilingual
+   claim is made for this channel. Non-English calls fall to issue 2.
+2. **`small` still produces repetitive output on badly degraded or non-English
+   audio** despite `condition_on_previous_text=False`. The `min_words` gate only
+   catches short hallucinations. **Partly addressed:** `looks_like_asr_noise` in
+   `tactics.py` abstains (source "none") when the distinct-word ratio is below
+   0.30 (pure loops) or the repeated word-pair ratio is above 0.15 (a phrase
+   repeated among other junk). It gates both `analyze_rules` and `analyze()`, so a
+   noisy transcript never reaches the LLM.
+
+   Measured over 30 s windows, repeated word-pair ratio: genuine read-script 0.00,
+   genuine spontaneous speech up to 0.10 across four speakers and four codecs, the
+   non-English Exotel-call windows 0.08, 0.16, 0.39, 0.44. With the tool, all
+   seven genuine windows pass and three of the four Exotel windows are skipped.
+   The fourth (ratio 0.08) is garbled but not repetitive; it passes the guard and
+   scores `intent` 0.0 only because no English tactic keyword matched its
+   romanised text, which is luck, not coverage. n=4 speakers, one script, two real
+   calls. Not a WER measurement and not a benchmark; the thresholds are
+   provisional.
 
 ### No simulable channel degradation reproduces the failure, 2026-09-08
 
@@ -905,6 +959,7 @@ therefore use `codec_name` and `CodecName`, never `codec` and `Codec`.
 | Python | 3.13.15, `.venv` built by uv 0.12.1 |
 | Installed | pydantic, pytest, ruff, mypy, numpy 2.5.3, torch 2.11.0+cu128, torchaudio 2.11.0+cu128, transformers, soundfile 0.14.0, speechbrain 1.1.1 |
 | Added 2026-09-08 | speechbrain 1.1.1 for ECAPA-TDNN, plus hyperpyyaml, joblib, scipy, sentencepiece, requests, ruamel-yaml, cloudpickle |
+| Added 2026-09-08 (stt_llm) | faster-whisper 1.2.1 for local STT, with ctranslate2 4.8.2, av 18.1.0, onnxruntime 1.29.0, flatbuffers, protobuf. Owner-approved; also added to the `ml` extra in `pyproject.toml` |
 | FLAC decoding | `soundfile`, not torchaudio. torchaudio 2.11 delegates decoding to `torchcodec`, which is a heavier dependency than reading a FLAC warrants |
 | CUDA | available, `torch.cuda.is_available()` is True and reports the 4070 |
 | `uv` | 0.12.10 at `%USERPROFILE%\.local\bin\uv.exe`. README repo state says 0.12.1 |

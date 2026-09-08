@@ -13,6 +13,7 @@ ml = [
     "torchaudio",
     "transformers",
     "onnxruntime",
+    "faster-whisper",
 ]
 runtime = [
     "fastapi",

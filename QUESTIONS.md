@@ -201,3 +201,27 @@ closes that for `ml/` only.
 **What I need:** R2 to delete line 3 of the root `.gitignore`, commit the file so
 everyone gets it, and add `*.mp4`, `*.mpeg`, `*.m4a`, `*.aac`, `*.ogg` and `*.webm`
 to it.
+
+## R1 (ML) - 2026-09-08 - stt_llm needs a long stage-03 window
+
+**Blocked on:** Nothing built by R1. The stt_llm check exists and passes its smoke
+suite, but it needs a stage-03 window measured in tens of seconds, and
+`backend/app/pipeline/` is R2's folder.
+
+**What I tried:** Built `SttLlmCheck` (transcribe with faster-whisper small, then
+tactic analysis, emitting `SttLlmSignal`). It runs on whatever `CanonicalAudioBatch`
+window it is handed. On a ~4 s window, the machine fingerprint check's native size,
+there is almost never enough transcript to judge, so it returns SKIPPED every tick.
+A scam pitch (urgency, authority, an irreversible ask) plays out over 20 to 45
+seconds. Measured with `ml/tools/transcribe_file.py`: a 30 s window transcribes and
+scores; shorter windows mostly abstain.
+
+**What I need:** When stage 03 is built, stt_llm must receive a rolling window of
+roughly 45 s refreshed every 10 to 15 s, while the other three checks keep their
+~4 s window. Either the pipeline maintains a second longer buffer for this check or
+the runner accumulates for it. This is a design constraint on stage 03, not a
+contract change: `CanonicalAudioBatch` already carries `window_ms` and the check
+reads it. Raising it now so the buffer is designed for two window sizes from the
+start rather than retrofitted.
+
+Detail in `ml/README.md`, the stt_llm status row and the ASR findings section.
