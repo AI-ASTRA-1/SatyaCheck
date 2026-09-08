@@ -18,6 +18,8 @@ interface Props {
   state: SocketStatus;
   onReconnect: () => void;
   onHistory: () => void;
+  /** Navigate to the WebRTC in-app call screen (fallback path). */
+  onCall?: () => void;
 }
 
 /**
@@ -32,7 +34,7 @@ interface Props {
  *   live                      -> RiskChip + detail rows
  *   ended                     -> summary card
  */
-export function OverlayScreen({ state, onReconnect, onHistory }: Props) {
+export function OverlayScreen({ state, onReconnect, onHistory, onCall }: Props) {
   // Drive the native overlay window in sync with the socket state.
   useOverlay(state);
 
@@ -40,9 +42,16 @@ export function OverlayScreen({ state, onReconnect, onHistory }: Props) {
     <SafeAreaView style={styles.safe}>
       <View style={styles.header}>
         <Text style={styles.title}>SATYACHECK</Text>
-        <TouchableOpacity onPress={onHistory} style={styles.histBtn}>
-          <Text style={styles.histBtnText}>History</Text>
-        </TouchableOpacity>
+        <View style={styles.headerBtns}>
+          {onCall && (
+            <TouchableOpacity onPress={onCall} style={styles.callBtn}>
+              <Text style={styles.callBtnText}>Call</Text>
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity onPress={onHistory} style={styles.histBtn}>
+            <Text style={styles.histBtnText}>History</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView contentContainerStyle={styles.body}>
@@ -152,6 +161,9 @@ const styles = StyleSheet.create({
     borderBottomColor: "#1f1f1f",
   },
   title: { color: "#ffffff", fontSize: 18, fontWeight: "700", letterSpacing: 1 },
+  headerBtns: { flexDirection: "row", alignItems: "center", gap: 12 },
+  callBtn: { paddingVertical: 4, paddingHorizontal: 10, backgroundColor: "#1d4ed8", borderRadius: 6 },
+  callBtnText: { color: "#ffffff", fontSize: 13, fontWeight: "600" },
   histBtn: { padding: 6 },
   histBtnText: { color: "#6b7280", fontSize: 14 },
   body: { padding: 20, flexGrow: 1 },

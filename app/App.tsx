@@ -4,10 +4,11 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { isPermissionGranted, requestPermission } from "./src/overlay/useOverlay";
 import { AlertHistoryScreen } from "./src/screens/AlertHistoryScreen";
 import { OverlayScreen } from "./src/screens/OverlayScreen";
+import { CallScreen } from "./src/screens/CallScreen";
 import { WS_URL } from "./src/config";
 import { useRiskSocket } from "./src/ws/useRiskSocket";
 
-type Screen = "main" | "history";
+type Screen = "main" | "history" | "call";
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>("main");
@@ -43,6 +44,7 @@ export default function App() {
 
   const goHistory = useCallback(() => setScreen("history"), []);
   const goMain = useCallback(() => setScreen("main"), []);
+  const goCall = useCallback(() => setScreen("call"), []);
 
   return (
     <SafeAreaProvider>
@@ -51,9 +53,13 @@ export default function App() {
           state={state}
           onReconnect={reconnect}
           onHistory={goHistory}
+          onCall={goCall}
         />
-      ) : (
+      ) : screen === "history" ? (
         <AlertHistoryScreen history={alertHistory} onBack={goMain} />
+      ) : (
+        // WebRTC fallback path -- completely separate from Exotel path above.
+        <CallScreen riskState={state} onBack={goMain} />
       )}
     </SafeAreaProvider>
   );
