@@ -18,6 +18,8 @@ is a stub, and what the environment can currently do.
 | calibration | Not started. |
 | `tools/frozen_config.py` | Reads the frozen diagnosis config out of the running code. `FROZEN.md` at the repo root is transcribed from it, and `tests/test_frozen_config.py` fails if the two drift apart. |
 | `tools/baseline.py` | Scores every clip we have into `data/results/baseline.csv`, and refuses to pass if the anchors have drifted. |
+| `tools/ood.py` | Asks what the model says about audio that is not speech at all. Writes `data/results/ood.csv`. |
+| `eval/probes.py` | Seeded non-speech generators: white noise, pink noise, a synthesised chord bed, near-silence. Plus evenly spaced segment sampling. |
 | `eval/runlog.py` | The one CSV schema every diagnostic writes. Rejects a NaN or an out-of-range score at construction; a missing score is an empty cell with `vad_status FAIL`. |
 | `eval/canonical.py` | The single ffmpeg decode path to 16 kHz mono s16le, cached. Refuses to read anything not already canonical rather than converting it silently. |
 | `BENCHMARK_FORMAT.md` | File format, metadata and labelling spec. Applies now; the 30-plus speaker benchmark it describes is a later phase. |
@@ -400,6 +402,79 @@ gate now falls back to a quarter hop and then to the single most speech-active
 window, and reports how it got there; a score that cannot be produced is `None` with
 `vad_status FAIL` and a reason, never nan. See "Which 4 s window you score decides
 the answer" below, because fixing it turned up something larger.
+
+### The model does not call non-speech synthetic, 2026-09-08
+
+`data/results/ood.csv`, 60 rows, one frozen config, byte-identical on a re-run. Four
+non-speech conditions and two genuine controls, five repetitions each, every item
+exactly one 4.0375 s window so no row differs from another in window count. The
+controls are in the same run as the probes, because a comparison across two runs
+measures the runs as well as the conditions.
+
+| condition | n | mean | min | max |
+|---|---|---|---|---|
+| `white_noise` | 5 | 0.000 | 0.000 | 0.000 |
+| `pink_noise` | 5 | 0.001 | 0.000 | 0.001 |
+| `music`, synthesised chord bed | 5 | 0.002 | 0.000 | 0.010 |
+| `silence_dither` | 5 | 0.000 | 0.000 | 0.000 |
+| `genuine_studio`, ASVspoof bonafide | 5 | 0.004 | 0.000 | 0.016 |
+| `genuine_phone`, one of ours | 5 | **0.400** | **0.001** | **0.999** |
+
+**S_ood = 0.0009** over the 20 non-speech probes. Rule 1 of the H+4 gate fires above
+0.85, so it does not fire.
+
+**The model's positive class is not "not-ASVspoof".** Gaussian noise, 1/f noise, a
+harmonic chord bed and near-silence all score essentially zero. Whatever it has
+learned, it is not "anything unfamiliar is synthetic", and the decision boundary is
+not simply in the wrong place. That rules out the cheapest explanation for the
+failure on our recordings, and it rules it out in the direction that leaves the
+model usable.
+
+**The activity gate cannot reject non-speech, and that is worth knowing.** Every
+probe passed the VAD. The gate is relative to the file's own level (0.15 of its 95th
+percentile frame RMS), so uniform noise reads as 100% active. Gated and bypassed
+scores are therefore identical on all 60 rows. The gate exists to avoid averaging
+silence into a speech score, not to detect speech, and nothing downstream should
+treat `vad_status PASS` as evidence that the audio contains a voice.
+
+### The per-window response is bimodal, 2026-09-08
+
+The `genuine_phone` control above spans **0.001 to 0.999 across five segments of one
+88 s recording**. That is not noise around a mean, so the per-window scores of all
+six internal recordings were scored directly:
+
+| recording | windows | file mean | below 0.1 | above 0.9 | between |
+|---|---|---|---|---|---|
+| `spk_01_source` | 10 | 0.436 | **5** | 4 | 1 |
+| `spk_02_source` | 16 | 0.678 | **4** | 9 | 3 |
+| `spk_03_source` | 13 | 0.922 | 1 | 12 | 0 |
+| `spk_03b_source` | 12 | 0.920 | 1 | 11 | 0 |
+| `nik_clean` | 9 | 0.990 | 0 | 9 | 0 |
+| `nik_clone`, the clone | 12 | 0.938 | 0 | 11 | 1 |
+
+`spk_01_source`, window by window: 0.11, 1.00, 1.00, 0.06, 0.02, 0.01, 0.08, 1.00,
+0.10, 0.98.
+
+**The file-level score is a mean of a bimodal distribution and describes no window
+that exists.** On the same speaker, same device, same session, the model is
+confidently genuine on half the windows and confidently synthetic on the other half.
+"0.436" reads as uncertainty; the underlying behaviour is not uncertainty, it is two
+confident answers to the same question.
+
+**This corrects how the earlier finding should be stated.** "Five of five genuine
+speakers are flagged" is true of the file means and hides that 5 of 10 windows of
+`spk_01` score below 0.1. The accurate statement is that the per-window response is
+unstable within a single recording, and averaging turns that instability into a
+middling number that looks like a calibration problem rather than what it is.
+
+**It does not produce a separation, and must not be presented as one.** The fraction
+of windows above 0.9 is 0.40, 0.56, 0.92, 0.92 and 1.00 for the genuine recordings
+against 0.92 for the clone. The clone sits inside the genuine range on that
+statistic too, so no per-window voting rule separates them either. What changed is
+the description of the failure, not the outcome.
+
+**Scope.** n=3 speakers, 5 recordings, 1 clone, 1 cloning tool, one model, one run.
+It says nothing about how general the bimodality is.
 
 ### The reproducible baseline, 2026-09-08
 

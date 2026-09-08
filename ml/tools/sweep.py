@@ -45,6 +45,7 @@ __all__ = [
     "conditions",
     "mean_score",
     "read_wav",
+    "score_window",
     "speech_windows",
 ]
 
@@ -94,6 +95,37 @@ def conditions(x: np.ndarray, rng: np.random.Generator) -> dict[str, np.ndarray]
     return built
 
 
+def score_window(
+    check: MachineFingerprintCheck, chunk: np.ndarray
+) -> float | None:
+    """One window through the real check. `None` when the check emits no signal.
+
+    Split out of `mean_score` so the VAD-bypassed probe in `ml/tools/ood.py` runs
+    the identical path minus window selection. Two copies of this would be two
+    pipelines, and the whole diagnosis rests on there being one.
+    """
+    started = datetime.now(UTC)
+    pcm = (np.clip(chunk, -1.0, 1.0) * 32767).astype("<i2").tobytes()
+    batch = CanonicalAudioBatch(
+        stream_id="sweep",
+        call_id="sweep",
+        start_sequence=0,
+        end_sequence=0,
+        pcm_s16le=pcm,
+        sample_count=len(chunk),
+        capture_started_at=started,
+        capture_ended_at=started + timedelta(seconds=len(chunk) / 16000),
+        window_ms=int(len(chunk) / 16000 * 1000),
+    )
+    outcome = check.run(
+        batch,
+        CallContext(stream_id="sweep", call_id="sweep", started_at=started),
+    )
+    if isinstance(outcome.signal, MachineFingerprintSignal):
+        return float(outcome.signal.synthetic_probability)
+    return None
+
+
 def mean_score(
     check: MachineFingerprintCheck, x: np.ndarray
 ) -> dict[str, object]:
@@ -120,25 +152,7 @@ def mean_score(
     }
     if not windows:
         return result
-    started = datetime.now(UTC)
-    context = CallContext(stream_id="sweep", call_id="sweep", started_at=started)
-    scores = []
-    for chunk in windows:
-        pcm = (np.clip(chunk, -1.0, 1.0) * 32767).astype("<i2").tobytes()
-        batch = CanonicalAudioBatch(
-            stream_id="sweep",
-            call_id="sweep",
-            start_sequence=0,
-            end_sequence=0,
-            pcm_s16le=pcm,
-            sample_count=len(chunk),
-            capture_started_at=started,
-            capture_ended_at=started + timedelta(seconds=len(chunk) / 16000),
-            window_ms=int(len(chunk) / 16000 * 1000),
-        )
-        outcome = check.run(batch, context)
-        if isinstance(outcome.signal, MachineFingerprintSignal):
-            scores.append(outcome.signal.synthetic_probability)
+    scores = [s for s in (score_window(check, c) for c in windows) if s is not None]
     if not scores:
         # Windows were selected but the scorer refused every one of them. That is a
         # model failure rather than a silence failure, so it reports FAIL with its
