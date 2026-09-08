@@ -61,6 +61,15 @@ const RTC_CONFIG: any = {
 export function useWebRTCCall() {
   const [callState, setCallState] = useState<CallState>({ status: "idle" });
   const [role, setRole] = useState<CallRole | null>(null);
+  const [isSpeakerOn, setIsSpeakerOn] = useState(false);
+
+  const toggleSpeaker = useCallback(() => {
+    setIsSpeakerOn((prev) => {
+      const next = !prev;
+      setSpeakerphoneOn(next);
+      return next;
+    });
+  }, []);
 
   const { sigState, lastMessage, connect: connectSignalling, send, disconnect: disconnectSignalling } =
     useSignalling();
@@ -115,13 +124,6 @@ export function useWebRTCCall() {
       console.log("[useWebRTCCall] Remote track received, kind:", event.track?.kind);
       if (event.track) {
         event.track.enabled = true;
-        try {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (event.track as any)._setVolume(10.0);
-          console.log("[useWebRTCCall] Audio track volume set to 10.0 (max gain)");
-        } catch (e) {
-          console.log("[useWebRTCCall] _setVolume note:", e);
-        }
       }
       // Receiver only: remote track = caller's voice. Tap it to backend.
       if (roleRef.current === "receiver") {
@@ -165,6 +167,7 @@ export function useWebRTCCall() {
   }
 
   function cleanup() {
+    setIsSpeakerOn(false);
     setSpeakerphoneOn(false);
     pendingRemoteIceRef.current = [];
     localStreamRef.current?.getTracks().forEach((t) => t.stop());
@@ -253,7 +256,7 @@ export function useWebRTCCall() {
           call_id: callId,
           sdp: (answer as RTCSessionDescription).sdp ?? "",
         });
-        setSpeakerphoneOn(true);
+        setSpeakerphoneOn(false);
       } catch (err) {
         console.error("accept error:", err);
         cleanup();
@@ -310,7 +313,7 @@ export function useWebRTCCall() {
                 flushPendingRemoteIce(pcRef.current);
               }
               setCallState({ status: "active", callId: callIdRef.current });
-              setSpeakerphoneOn(true);
+              setSpeakerphoneOn(false);
             })
             .catch((e) => {
               console.warn("[useWebRTCCall] setRemoteDescription error:", e);
@@ -367,5 +370,7 @@ export function useWebRTCCall() {
     accept: (callId: string, offerSdp?: string) => accept(callId, offerSdp),
     hangup,
     connectSignalling,
+    isSpeakerOn,
+    toggleSpeaker,
   };
 }

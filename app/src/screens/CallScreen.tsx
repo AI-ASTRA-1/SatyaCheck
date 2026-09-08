@@ -44,8 +44,17 @@ interface Props {
 }
 
 export function CallScreen({ riskState, onBack }: Props) {
-  const { callState, role, sigState, dial, accept, hangup, connectSignalling } =
-    useWebRTCCall();
+  const {
+    callState,
+    role,
+    sigState,
+    dial,
+    accept,
+    hangup,
+    connectSignalling,
+    isSpeakerOn,
+    toggleSpeaker,
+  } = useWebRTCCall();
 
   // Drive the native overlay in sync with the risk socket -- same as OverlayScreen.
   useOverlay(riskState);
@@ -206,9 +215,24 @@ export function CallScreen({ riskState, onBack }: Props) {
           <Text style={styles.hint}>Waiting for risk analysis...</Text>
         )}
 
-        <TouchableOpacity style={styles.endBtn} onPress={handleHangup}>
-          <Text style={styles.endBtnText}>End Call</Text>
-        </TouchableOpacity>
+        <View style={styles.actionRow}>
+          <TouchableOpacity
+            style={[styles.speakerBtn, isSpeakerOn && styles.speakerBtnActive]}
+            onPress={toggleSpeaker}
+          >
+            <Text
+              style={[
+                styles.speakerBtnText,
+                isSpeakerOn && styles.speakerBtnTextActive,
+              ]}
+            >
+              {isSpeakerOn ? "Speaker: ON" : "Audio: Earpiece"}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.endBtn} onPress={handleHangup}>
+            <Text style={styles.endBtnText}>End Call</Text>
+          </TouchableOpacity>
+        </View>
       </ScrollView>
     );
   }
@@ -351,12 +375,40 @@ const styles = StyleSheet.create({
   primaryBtnText: { color: "#ffffff", fontSize: 15, fontWeight: "700" },
   btnDisabled: { opacity: 0.4 },
 
+  actionRow: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 8,
+  },
+  speakerBtn: {
+    flex: 1,
+    backgroundColor: "#f1f5f9",
+    borderWidth: 1,
+    borderColor: "#cbd5e1",
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  speakerBtnActive: {
+    backgroundColor: "#e0f2fe",
+    borderColor: "#0284c7",
+  },
+  speakerBtnText: {
+    color: "#334155",
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  speakerBtnTextActive: {
+    color: "#0369a1",
+  },
   endBtn: {
+    flex: 1,
     backgroundColor: "#dc2626",
     borderRadius: 12,
     paddingVertical: 14,
-    paddingHorizontal: 32,
     alignItems: "center",
+    justifyContent: "center",
   },
   endBtnText: { color: "#ffffff", fontSize: 15, fontWeight: "700" },
 
