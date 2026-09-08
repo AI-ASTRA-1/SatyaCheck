@@ -1,22 +1,30 @@
 """WebRTC audio stream adapter implementing contracts.acquisition.AudioStreamAdapter.
 
-This module consumes incoming WebRTC media tracks via aiortc, splits or converts
-frames into AudioChunk payloads, and delivers them strictly in sequence:
-1. on_open(StreamOpen) -> once before any audio
-2. on_chunk(AudioChunk) -> once per frame with monotonic sequence numbers starting at 0
-3. on_close(StreamClose) -> once after stream termination
+Receives audio frames via a WebSocket ingest connection (port 8767) from the
+receiver app (Phone B), which taps its incoming WebRTC remote audio track and
+forwards raw Opus frames to this adapter.
+
+Lifecycle per call:
+1. on_open(StreamOpen)  -- once, on JSON handshake receipt
+2. on_chunk(AudioChunk) -- once per binary frame (20 ms Opus)
+3. on_close(StreamClose) -- once, on WebSocket disconnect or hangup
 """
 from __future__ import annotations
 
 import asyncio
 from datetime import datetime, timezone
 import inspect
+import json
 import logging
 from typing import Any, Callable, Dict, Optional, Union
-from urllib.parse import urlparse
 import uuid
 
-# Invariant: only standard library, aiortc, websockets, and contracts.acquisition
+# Invariant: only standard library, websockets, and contracts.acquisition
+try:
+    import websockets
+except ImportError:
+    websockets = None  # type: ignore[assignment]
+
 try:
     from contracts.acquisition import (
         AudioChunk,
@@ -42,6 +50,12 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+# Maps handshake codec strings to Codec enum values
+_CODEC_MAP: Dict[str, Codec] = {
+    "opus": Codec.OPUS,
+    "pcm_s16le": Codec.PCM_S16LE,
+}
+
 
 def _invoke_callback(callback: Optional[Callable[[Any], None]], arg: Any) -> None:
     """Safely invoke synchronous or asynchronous callback."""
@@ -60,7 +74,12 @@ def _invoke_callback(callback: Optional[Callable[[Any], None]], arg: Any) -> Non
 
 
 class WebRTCSession:
-    """Encapsulates a single WebRTC audio session / stream leg."""
+    """Encapsulates a single WebRTC audio session / stream leg.
+
+    Each session maps to one call's audio flowing through the ingest
+    WebSocket. Sequence numbers are monotonic starting at 0 and
+    callbacks follow the strict open -> chunk* -> close order.
+    """
 
     def __init__(
         self,
@@ -94,7 +113,6 @@ class WebRTCSession:
 
         self._opened = False
         self._closed = False
-        self._lock = asyncio.Lock()
 
     def start(self) -> None:
         """Trigger on_open once before any audio chunk is emitted."""
@@ -161,78 +179,8 @@ class WebRTCSession:
         _invoke_callback(self._on_chunk, chunk)
         return chunk
 
-    async def handle_audio_track(self, track: Any) -> None:
-        """Consume incoming aiortc MediaStreamTrack frames asynchronously."""
-        self.start()
-        logger.info("Started consuming audio track for stream %s (call %s)", self.stream_id, self.call_id)
-        try:
-            while not self._closed:
-                try:
-                    frame = await track.recv()
-                except Exception as exc:
-                    # aiortc raises MediaStreamError or CancelledError when track ends
-                    logger.debug("Track recv stopped for stream %s: %s", self.stream_id, exc)
-                    break
-
-                if frame is None:
-                    break
-
-                # Extract raw audio bytes from av.AudioFrame or bytes
-                payload = b""
-                if hasattr(frame, "planes") and frame.planes:
-                    payload = bytes(frame.planes[0])
-                elif hasattr(frame, "to_ndarray"):
-                    payload = frame.to_ndarray().tobytes()
-                elif isinstance(frame, bytes):
-                    payload = frame
-                elif hasattr(frame, "data"):
-                    payload = bytes(frame.data)
-                else:
-                    payload = bytes(frame)
-
-                rtp_ts = getattr(frame, "pts", None)
-                capture_ts = getattr(frame, "time", None)
-                if capture_ts is None:
-                    capture_ts = datetime.now(timezone.utc).timestamp()
-
-                self.push_chunk(payload=payload, capture_timestamp=capture_ts, rtp_ts=rtp_ts)
-        except asyncio.CancelledError:
-            logger.info("Audio track consumption cancelled for stream %s", self.stream_id)
-        finally:
-            await self.close(reason="completed")
-
-    async def close(self, reason: str = "completed") -> None:
-        """Close the session and emit StreamClose exactly once."""
-        async with self._lock:
-            if self._closed:
-                return
-            self._closed = True
-
-            # If closed before any audio was emitted, ensure on_open is fired first per contract
-            if not self._opened:
-                self.start()
-
-            close_msg = StreamClose(
-                stream_id=self.stream_id,
-                call_id=self.call_id,
-                ended_at=datetime.now(timezone.utc),
-                reason=reason,
-                frames_received=self.frames_received,
-                bytes_received=self.bytes_received,
-                dropped_frames=self.dropped_frames,
-            )
-            _invoke_callback(self._on_close, close_msg)
-            logger.info(
-                "Closed WebRTC session %s (call %s, reason=%s, frames=%d, bytes=%d)",
-                self.stream_id,
-                self.call_id,
-                reason,
-                self.frames_received,
-                self.bytes_received,
-            )
-
     def close_sync(self, reason: str = "completed") -> None:
-        """Synchronous wrapper for closing session."""
+        """Close the session and emit StreamClose exactly once."""
         if self._closed:
             return
         self._closed = True
@@ -253,7 +201,18 @@ class WebRTCSession:
 
 
 class WebRTCAdapter:
-    """Production-ready WebRTC AudioStreamAdapter implementing contracts.acquisition."""
+    """WebRTC AudioStreamAdapter receiving audio via WebSocket binary frames.
+
+    The receiver app (Phone B) taps the incoming WebRTC remote audio track
+    and forwards raw Opus frames to this adapter over a WebSocket connection
+    on the audio ingest port (default 8767).
+
+    Protocol on the ingest WebSocket:
+    1. First message (text): JSON handshake
+       ``{"call_id": "...", "codec": "opus", "sample_rate": 48000, "channels": 1}``
+    2. Subsequent messages (binary): raw Opus audio frames, 20 ms each
+    3. On disconnect: session is closed, StreamClose emitted
+    """
 
     def __init__(
         self,
@@ -274,7 +233,7 @@ class WebRTCAdapter:
         self._endpoint: Optional[str] = None
         self._is_connected: bool = False
         self._sessions: Dict[str, WebRTCSession] = {}
-        self._signalling_server: Optional[Any] = None
+        self._ingest_server: Optional[Any] = None
 
     @property
     def is_connected(self) -> bool:
@@ -294,7 +253,7 @@ class WebRTCAdapter:
         Parameters
         ----------
         endpoint : str
-            Target signalling endpoint or bind URI (e.g. 'ws://0.0.0.0:8766' or '0.0.0.0:8766').
+            Target audio ingest endpoint URI (e.g. ``ws://0.0.0.0:8767``).
         on_open : Callable[[StreamOpen], None]
             Stage 02 consumer callback for stream start.
         on_chunk : Callable[[AudioChunk], None]
@@ -310,16 +269,23 @@ class WebRTCAdapter:
 
         logger.info("WebRTCAdapter connected to endpoint: %s", endpoint)
 
-    def create_session(self, call_id: str, peer_id: Optional[str] = None) -> WebRTCSession:
+    def create_session(
+        self,
+        call_id: str,
+        peer_id: Optional[str] = None,
+        codec: Optional[Codec] = None,
+        sample_rate: Optional[int] = None,
+        channels: Optional[int] = None,
+    ) -> WebRTCSession:
         """Create and track a new WebRTCSession with unique stream_id."""
         stream_id = f"stream_{uuid.uuid4().hex}"
         session = WebRTCSession(
             stream_id=stream_id,
             call_id=call_id,
             peer_id=peer_id,
-            codec=self.codec,
-            sample_rate=self.sample_rate,
-            channels=self.channels,
+            codec=codec or self.codec,
+            sample_rate=sample_rate or self.sample_rate,
+            channels=channels or self.channels,
             frame_ms=self.frame_ms,
             on_open=self._on_open,
             on_chunk=self._on_chunk,
@@ -332,10 +298,116 @@ class WebRTCAdapter:
         """Retrieve active session by stream ID."""
         return self._sessions.get(stream_id)
 
+    # -- audio ingest WebSocket server ---------------------------------------
+
+    async def _handle_audio_ws(self, websocket: Any) -> None:
+        """Handle a single audio ingest WebSocket connection.
+
+        Protocol:
+        1. First message must be a JSON handshake with at least ``call_id``.
+        2. All subsequent binary messages are treated as Opus audio frames.
+        3. A text message with ``{"type": "hangup"}`` ends the session early.
+        4. On WebSocket close the session is finalized with StreamClose.
+        """
+        session: Optional[WebRTCSession] = None
+
+        try:
+            # -- step 1: JSON handshake --------------------------------------
+            raw_handshake = await websocket.recv()
+
+            if isinstance(raw_handshake, bytes):
+                logger.warning("Audio ingest: first message must be JSON, got binary")
+                return
+
+            try:
+                handshake = json.loads(raw_handshake)
+            except json.JSONDecodeError as exc:
+                logger.warning("Audio ingest: invalid JSON handshake: %s", exc)
+                return
+
+            call_id = handshake.get("call_id")
+            if not call_id:
+                logger.warning("Audio ingest: handshake missing call_id")
+                return
+
+            codec_str = handshake.get("codec", "opus")
+            codec = _CODEC_MAP.get(codec_str, self.codec)
+            sample_rate = handshake.get("sample_rate", self.sample_rate)
+            channels = handshake.get("channels", self.channels)
+
+            session = self.create_session(
+                call_id=call_id,
+                codec=codec,
+                sample_rate=sample_rate,
+                channels=channels,
+            )
+            session.start()
+            logger.info(
+                "Audio ingest session started: stream=%s call=%s codec=%s rate=%d",
+                session.stream_id, call_id, codec_str, sample_rate,
+            )
+
+            # -- step 2: receive audio frames --------------------------------
+            async for message in websocket:
+                if isinstance(message, bytes):
+                    session.push_chunk(payload=message)
+                elif isinstance(message, str):
+                    # Text message during streaming: check for control commands
+                    try:
+                        ctrl = json.loads(message)
+                        if ctrl.get("type") == "hangup":
+                            logger.info(
+                                "Audio ingest: hangup received for stream %s",
+                                session.stream_id,
+                            )
+                            break
+                    except json.JSONDecodeError:
+                        pass
+
+        except websockets.exceptions.ConnectionClosed:
+            logger.info("Audio ingest: client disconnected")
+        except Exception as exc:
+            logger.error("Audio ingest error: %s", exc, exc_info=True)
+        finally:
+            if session is not None:
+                session.close_sync(reason="completed")
+                logger.info(
+                    "Audio ingest session closed: stream=%s frames=%d bytes=%d",
+                    session.stream_id, session.frames_received, session.bytes_received,
+                )
+
+    async def serve_audio_ingest(
+        self, host: str = "0.0.0.0", port: int = 8767,
+    ) -> None:
+        """Start the audio ingest WebSocket server.
+
+        The server listens for connections from the receiver app (Phone B)
+        which forwards tapped WebRTC audio frames as binary WebSocket messages.
+        """
+        if websockets is None:
+            raise RuntimeError(
+                "websockets library is required. Install via: pip install websockets",
+            )
+        logger.info("Starting audio ingest server on ws://%s:%d", host, port)
+        self._ingest_server = await websockets.serve(
+            self._handle_audio_ws, host, port,
+        )
+
+    async def close_ingest(self) -> None:
+        """Stop the audio ingest server and close all sessions."""
+        if self._ingest_server:
+            self._ingest_server.close()
+            await self._ingest_server.wait_closed()
+        for session in list(self._sessions.values()):
+            session.close_sync(reason="completed")
+        self._sessions.clear()
+        self._is_connected = False
+        logger.info("Audio ingest server stopped.")
+
     def close(self) -> None:
         """Terminate all active sessions and mark adapter disconnected."""
         for session in list(self._sessions.values()):
-            session.close_sync(reason="adapter_closed")
+            session.close_sync(reason="completed")
         self._sessions.clear()
         self._is_connected = False
         logger.info("WebRTCAdapter closed.")

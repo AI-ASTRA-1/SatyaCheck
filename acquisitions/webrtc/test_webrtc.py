@@ -1,19 +1,21 @@
-"""Unit tests for WebRTC acquisition layer.
+"""Unit tests for the rewritten WebRTC acquisition layer.
 
 Verifies:
-1. Protocol conformance (AudioStreamAdapter & AudioStreamConsumer).
-2. Monotonic sequence numbering and field validation on AudioChunk.
-3. Exact callback ordering (on_open -> on_chunk* -> on_close).
-4. Transport invariant AST walk ensuring no illegal imports across boundaries.
+1. Protocol conformance (AudioStreamAdapter signature).
+2. Audio ingest WebSocket: JSON handshake then binary Opus frames produce
+   correct AudioChunk callbacks with monotonic sequences.
+3. Signalling broker: full dial -> ringing -> incoming_call -> accept ->
+   answer -> hangup -> call_ended flow.
+4. Signalling broker: ICE candidate relay between caller and callee.
+5. Transport invariant AST walk ensuring no illegal imports.
 """
 from __future__ import annotations
 
 import ast
 import asyncio
-from datetime import datetime
 import inspect
+import json
 from pathlib import Path
-import sys
 from typing import List
 import unittest
 
@@ -29,6 +31,8 @@ from .contracts_shim import (
 )
 from .adapter import WebRTCAdapter, WebRTCSession
 from .signalling import SignallingServer
+
+import websockets
 
 
 class DummyConsumer:
@@ -50,7 +54,7 @@ class DummyConsumer:
 
 
 class TestWebRTCAdapterProtocol(unittest.TestCase):
-    """Test suite for protocol compliance and callback sequences."""
+    """Test suite for protocol compliance."""
 
     def test_protocol_signature(self) -> None:
         """Verify WebRTCAdapter satisfies AudioStreamAdapter signature."""
@@ -69,114 +73,254 @@ class TestWebRTCAdapterProtocol(unittest.TestCase):
         self.assertEqual(sig.parameters["on_chunk"].kind, inspect.Parameter.KEYWORD_ONLY)
         self.assertEqual(sig.parameters["on_close"].kind, inspect.Parameter.KEYWORD_ONLY)
 
-    def test_audio_chunk_monotonicity_and_fields(self) -> None:
-        """Verify 10 chunks fed through adapter maintain monotonic sequence and transport tag."""
-        consumer = DummyConsumer()
-        adapter = WebRTCAdapter(codec=Codec.OPUS, sample_rate=48000, channels=1, frame_ms=20)
 
-        adapter.connect(
-            endpoint="ws://127.0.0.1:8766",
-            on_open=consumer.on_open,
-            on_chunk=consumer.on_chunk,
-            on_close=consumer.on_close,
-        )
+class TestAudioIngest(unittest.TestCase):
+    """Test audio ingest WebSocket: handshake + binary frames."""
 
-        call_id = "test_call_987"
-        peer_id = "peer_test_456"
-        session = adapter.create_session(call_id=call_id, peer_id=peer_id)
+    def test_audio_ingest_handshake_and_chunks(self) -> None:
+        """JSON handshake on ingest port, then 10 binary frames produce
+        10 AudioChunk callbacks with monotonic sequence and correct fields."""
 
-        # Feed 10 chunks
-        payload_chunk = b"\x00\x01\x02\x03\x04" * 10  # 50 bytes
-        for i in range(10):
-            session.push_chunk(payload=payload_chunk, rtp_ts=1000 + i * 960)
-
-        session.close_sync(reason="completed")
-
-        # 1. Verify on_open
-        self.assertIsNotNone(consumer.open_msg)
-        open_msg = consumer.open_msg
-        self.assertEqual(open_msg.stream_id, session.stream_id)
-        self.assertEqual(open_msg.call_id, call_id)
-        self.assertEqual(open_msg.transport, Transport.WEBRTC)
-        self.assertEqual(open_msg.direction, CallDirection.INBOUND)
-        self.assertIsNone(open_msg.caller_number)
-        self.assertIsNone(open_msg.callee_number)
-        self.assertEqual(open_msg.codec, Codec.OPUS)
-        self.assertEqual(open_msg.sample_rate, 48000)
-        self.assertEqual(open_msg.channels, 1)
-        self.assertEqual(open_msg.frame_ms, 20)
-        self.assertEqual(open_msg.external_ref, peer_id)
-
-        # 2. Verify chunks
-        self.assertEqual(len(consumer.chunks), 10)
-        for idx, chunk in enumerate(consumer.chunks):
-            self.assertEqual(chunk.stream_id, session.stream_id)
-            self.assertEqual(chunk.call_id, call_id)
-            self.assertEqual(chunk.transport, Transport.WEBRTC)
-            self.assertEqual(chunk.codec, Codec.OPUS)
-            self.assertEqual(chunk.sample_rate, 48000)
-            self.assertEqual(chunk.channels, 1)
-            self.assertEqual(chunk.frame_ms, 20)
-            self.assertEqual(chunk.sequence, idx, f"Sequence must be monotonic {idx}")
-            self.assertEqual(chunk.payload, payload_chunk)
-            self.assertEqual(chunk.rtp_ts, 1000 + idx * 960)
-            self.assertEqual(chunk.metadata.get("peer_id"), peer_id)
-            self.assertIsInstance(chunk.received_at, datetime)
-
-        # 3. Verify on_close
-        self.assertIsNotNone(consumer.close_msg)
-        close_msg = consumer.close_msg
-        self.assertEqual(close_msg.stream_id, session.stream_id)
-        self.assertEqual(close_msg.call_id, call_id)
-        self.assertEqual(close_msg.reason, "completed")
-        self.assertEqual(close_msg.frames_received, 10)
-        self.assertEqual(close_msg.bytes_received, 10 * len(payload_chunk))
-        self.assertEqual(close_msg.dropped_frames, 0)
-
-    def test_mock_async_track_consumption(self) -> None:
-        """Test consuming an async audio track yielding frames."""
-        async def run_async_test() -> None:
+        async def run() -> None:
             consumer = DummyConsumer()
-            adapter = WebRTCAdapter()
+            adapter = WebRTCAdapter(codec=Codec.OPUS, sample_rate=48000, channels=1)
+            port = 18767  # test port, avoid clash with production
+
             adapter.connect(
-                endpoint="ws://127.0.0.1:8766",
+                endpoint=f"ws://127.0.0.1:{port}",
                 on_open=consumer.on_open,
                 on_chunk=consumer.on_chunk,
                 on_close=consumer.on_close,
             )
 
-            session = adapter.create_session(call_id="call_async_test")
+            await adapter.serve_audio_ingest(host="127.0.0.1", port=port)
 
-            # Mock track
-            class MockTrack:
-                def __init__(self) -> None:
-                    self.count = 0
+            try:
+                async with websockets.connect(f"ws://127.0.0.1:{port}") as ws:
+                    # Step 1: send JSON handshake
+                    handshake = {
+                        "call_id": "call_ingest_test",
+                        "codec": "opus",
+                        "sample_rate": 48000,
+                        "channels": 1,
+                    }
+                    await ws.send(json.dumps(handshake))
 
-                async def recv(self) -> bytes | None:
-                    if self.count >= 5:
-                        return None
-                    self.count += 1
-                    return b"\xaa\xbb" * 20
+                    # Small delay to let the server process the handshake
+                    await asyncio.sleep(0.05)
 
-            mock_track = MockTrack()
-            await session.handle_audio_track(mock_track)
+                    # Step 2: send 10 binary Opus frames
+                    payload = b"\xaa\xbb\xcc" * 20  # 60 bytes per frame
+                    for _ in range(10):
+                        await ws.send(payload)
+                        await asyncio.sleep(0.01)
 
-            self.assertEqual(len(consumer.chunks), 5)
-            self.assertEqual([c.sequence for c in consumer.chunks], [0, 1, 2, 3, 4])
-            self.assertIsNotNone(consumer.close_msg)
-            self.assertEqual(consumer.close_msg.frames_received, 5)
+                # WebSocket closed; give the server a moment to finalize
+                await asyncio.sleep(0.1)
 
-        asyncio.run(run_async_test())
+                # -- verify on_open --
+                self.assertIsNotNone(consumer.open_msg, "on_open was never called")
+                open_msg = consumer.open_msg
+                self.assertEqual(open_msg.call_id, "call_ingest_test")
+                self.assertEqual(open_msg.transport, Transport.WEBRTC)
+                self.assertEqual(open_msg.codec, Codec.OPUS)
+                self.assertEqual(open_msg.sample_rate, 48000)
+                self.assertEqual(open_msg.channels, 1)
+                self.assertEqual(open_msg.frame_ms, 20)
+                self.assertEqual(open_msg.direction, CallDirection.INBOUND)
+                self.assertTrue(open_msg.stream_id.startswith("stream_"))
+
+                # -- verify chunks --
+                self.assertEqual(len(consumer.chunks), 10, "Expected 10 chunks")
+                for idx, chunk in enumerate(consumer.chunks):
+                    self.assertEqual(chunk.call_id, "call_ingest_test")
+                    self.assertEqual(chunk.transport, Transport.WEBRTC)
+                    self.assertEqual(chunk.codec, Codec.OPUS)
+                    self.assertEqual(chunk.sequence, idx, f"Non-monotonic at {idx}")
+                    self.assertEqual(chunk.payload, payload)
+                    self.assertEqual(chunk.sample_rate, 48000)
+                    self.assertEqual(chunk.channels, 1)
+                    self.assertEqual(chunk.frame_ms, 20)
+
+                # -- verify on_close --
+                self.assertIsNotNone(consumer.close_msg, "on_close was never called")
+                close_msg = consumer.close_msg
+                self.assertEqual(close_msg.call_id, "call_ingest_test")
+                self.assertEqual(close_msg.reason, "completed")
+                self.assertEqual(close_msg.frames_received, 10)
+                self.assertEqual(close_msg.bytes_received, 10 * len(payload))
+
+            finally:
+                await adapter.close_ingest()
+
+        asyncio.run(run())
+
+
+class TestSignallingBroker(unittest.TestCase):
+    """Test the signalling broker message routing."""
+
+    def test_signalling_dial_accept_flow(self) -> None:
+        """Full flow: dial -> ringing, incoming_call -> accept -> answer,
+        hangup -> call_ended to both peers."""
+
+        async def run() -> None:
+            port = 18766
+            server = SignallingServer(host="127.0.0.1", port=port)
+            await server.start()
+
+            try:
+                # Connect two clients: caller and callee
+                async with websockets.connect(f"ws://127.0.0.1:{port}") as caller_ws:
+                    async with websockets.connect(f"ws://127.0.0.1:{port}") as callee_ws:
+                        # Small delay for both connections to register
+                        await asyncio.sleep(0.05)
+
+                        # Caller sends dial
+                        await caller_ws.send(json.dumps({
+                            "type": "dial",
+                            "call_id": "call_test_123",
+                            "sdp": "v=0\r\noffer_sdp_here",
+                        }))
+
+                        # Caller should receive ringing
+                        raw = await asyncio.wait_for(caller_ws.recv(), timeout=2.0)
+                        msg = json.loads(raw)
+                        self.assertEqual(msg["type"], "ringing")
+                        self.assertEqual(msg["call_id"], "call_test_123")
+
+                        # Callee should receive incoming_call with the offer
+                        raw = await asyncio.wait_for(callee_ws.recv(), timeout=2.0)
+                        msg = json.loads(raw)
+                        self.assertEqual(msg["type"], "incoming_call")
+                        self.assertEqual(msg["call_id"], "call_test_123")
+                        self.assertEqual(msg["sdp"], "v=0\r\noffer_sdp_here")
+
+                        # Callee sends accept with answer SDP
+                        await callee_ws.send(json.dumps({
+                            "type": "accept",
+                            "call_id": "call_test_123",
+                            "sdp": "v=0\r\nanswer_sdp_here",
+                        }))
+
+                        # Caller should receive answer
+                        raw = await asyncio.wait_for(caller_ws.recv(), timeout=2.0)
+                        msg = json.loads(raw)
+                        self.assertEqual(msg["type"], "answer")
+                        self.assertEqual(msg["sdp"], "v=0\r\nanswer_sdp_here")
+
+                        # Caller sends hangup
+                        await caller_ws.send(json.dumps({
+                            "type": "hangup",
+                            "call_id": "call_test_123",
+                        }))
+
+                        # Both should receive call_ended
+                        raw_caller = await asyncio.wait_for(caller_ws.recv(), timeout=2.0)
+                        msg_caller = json.loads(raw_caller)
+                        self.assertEqual(msg_caller["type"], "call_ended")
+                        self.assertEqual(msg_caller["call_id"], "call_test_123")
+
+                        raw_callee = await asyncio.wait_for(callee_ws.recv(), timeout=2.0)
+                        msg_callee = json.loads(raw_callee)
+                        self.assertEqual(msg_callee["type"], "call_ended")
+                        self.assertEqual(msg_callee["call_id"], "call_test_123")
+
+            finally:
+                await server.close()
+
+        asyncio.run(run())
+
+    def test_signalling_ice_relay(self) -> None:
+        """ICE candidates are relayed bidirectionally between caller and callee."""
+
+        async def run() -> None:
+            port = 18768
+            server = SignallingServer(host="127.0.0.1", port=port)
+            await server.start()
+
+            try:
+                async with websockets.connect(f"ws://127.0.0.1:{port}") as caller_ws:
+                    async with websockets.connect(f"ws://127.0.0.1:{port}") as callee_ws:
+                        await asyncio.sleep(0.05)
+
+                        # Establish call first
+                        await caller_ws.send(json.dumps({
+                            "type": "dial",
+                            "call_id": "call_ice_test",
+                            "sdp": "v=0\r\noffer",
+                        }))
+
+                        # Drain ringing and incoming_call
+                        await asyncio.wait_for(caller_ws.recv(), timeout=2.0)  # ringing
+                        await asyncio.wait_for(callee_ws.recv(), timeout=2.0)  # incoming_call
+
+                        # Accept
+                        await callee_ws.send(json.dumps({
+                            "type": "accept",
+                            "call_id": "call_ice_test",
+                            "sdp": "v=0\r\nanswer",
+                        }))
+                        await asyncio.wait_for(caller_ws.recv(), timeout=2.0)  # answer
+
+                        # Caller sends ICE candidate
+                        ice_from_caller = {
+                            "candidate": "candidate:1 1 UDP 2130706431 192.168.1.1 5000 typ host",
+                            "sdpMid": "0",
+                            "sdpMLineIndex": 0,
+                        }
+                        await caller_ws.send(json.dumps({
+                            "type": "ice",
+                            "call_id": "call_ice_test",
+                            "candidate": ice_from_caller,
+                        }))
+
+                        # Callee should receive the ICE candidate
+                        raw = await asyncio.wait_for(callee_ws.recv(), timeout=2.0)
+                        msg = json.loads(raw)
+                        self.assertEqual(msg["type"], "ice")
+                        self.assertEqual(msg["candidate"], ice_from_caller)
+
+                        # Callee sends ICE candidate back
+                        ice_from_callee = {
+                            "candidate": "candidate:2 1 UDP 2130706431 192.168.1.2 5001 typ host",
+                            "sdpMid": "0",
+                            "sdpMLineIndex": 0,
+                        }
+                        await callee_ws.send(json.dumps({
+                            "type": "ice",
+                            "call_id": "call_ice_test",
+                            "candidate": ice_from_callee,
+                        }))
+
+                        # Caller should receive it
+                        raw = await asyncio.wait_for(caller_ws.recv(), timeout=2.0)
+                        msg = json.loads(raw)
+                        self.assertEqual(msg["type"], "ice")
+                        self.assertEqual(msg["candidate"], ice_from_callee)
+
+                        # Clean up
+                        await caller_ws.send(json.dumps({
+                            "type": "hangup",
+                            "call_id": "call_ice_test",
+                        }))
+                        # Drain call_ended
+                        await asyncio.wait_for(caller_ws.recv(), timeout=2.0)
+                        await asyncio.wait_for(callee_ws.recv(), timeout=2.0)
+
+            finally:
+                await server.close()
+
+        asyncio.run(run())
 
 
 class TestTransportInvariant(unittest.TestCase):
     """AST walk verifying strict transport boundary invariants."""
 
     def test_transport_invariant_ast_walk(self) -> None:
-        """Verify acquisitions/webrtc/ only imports allowed modules and never touches backend/ml/app."""
+        """Verify acquisitions/webrtc/ only imports allowed modules
+        and never touches backend/ml/app."""
         webrtc_dir = Path(__file__).resolve().parent
 
-        # Whitelist of top-level modules allowed
         allowed_top_levels = {
             # Standard libraries
             "argparse", "ast", "asyncio", "dataclasses", "datetime", "enum",
@@ -206,7 +350,8 @@ class TestTransportInvariant(unittest.TestCase):
                         for forbidden in forbidden_prefixes:
                             self.assertFalse(
                                 alias.name.startswith(forbidden),
-                                f"{py_file.name} illegally imports '{alias.name}' from forbidden layer '{forbidden}'",
+                                f"{py_file.name} illegally imports '{alias.name}' "
+                                f"from forbidden layer '{forbidden}'",
                             )
                         self.assertIn(
                             top_module,
@@ -215,7 +360,7 @@ class TestTransportInvariant(unittest.TestCase):
                         )
 
                 elif isinstance(node, ast.ImportFrom):
-                    # Relative imports (level > 0) within acquisitions/webrtc/ are intra-package
+                    # Relative imports within acquisitions/webrtc/ are fine
                     if node.level > 0:
                         continue
 
@@ -224,77 +369,14 @@ class TestTransportInvariant(unittest.TestCase):
                         for forbidden in forbidden_prefixes:
                             self.assertFalse(
                                 node.module.startswith(forbidden),
-                                f"{py_file.name} illegally imports '{node.module}' from forbidden layer '{forbidden}'",
+                                f"{py_file.name} illegally imports '{node.module}' "
+                                f"from forbidden layer '{forbidden}'",
                             )
                         self.assertIn(
                             top_module,
                             allowed_top_levels,
                             f"{py_file.name} imports unauthorized module '{node.module}'",
                         )
-
-
-class TestWebRTCEndToEnd(unittest.TestCase):
-    """End-to-end signalling handshake test using websockets and aiortc."""
-
-    def test_signalling_offer_answer_handshake(self) -> None:
-        """Test complete offer/answer handshake over WebSocket."""
-        from aiortc import RTCPeerConnection
-        import websockets
-        import json
-
-        async def run_e2e() -> None:
-            consumer = DummyConsumer()
-            adapter = WebRTCAdapter()
-            port = 8779
-            adapter.connect(
-                endpoint=f"ws://127.0.0.1:{port}",
-                on_open=consumer.on_open,
-                on_chunk=consumer.on_chunk,
-                on_close=consumer.on_close,
-            )
-
-            server = SignallingServer(adapter=adapter, host="127.0.0.1", port=port)
-            await server.start()
-
-            client_pc = RTCPeerConnection()
-            client_pc.addTransceiver("audio", direction="sendonly")
-
-            try:
-                async with websockets.connect(f"ws://127.0.0.1:{port}") as ws:
-                    offer = await client_pc.createOffer()
-                    await client_pc.setLocalDescription(offer)
-
-                    # Send offer
-                    await ws.send(json.dumps({
-                        "type": "offer",
-                        "call_id": "call_e2e_123",
-                        "sdp": client_pc.localDescription.sdp,
-                    }))
-
-                    # Receive session_id
-                    raw_msg1 = await ws.recv()
-                    msg1 = json.loads(raw_msg1)
-                    self.assertEqual(msg1.get("type"), "session_id")
-                    self.assertEqual(msg1.get("call_id"), "call_e2e_123")
-                    self.assertTrue(msg1.get("stream_id").startswith("stream_"))
-
-                    # Receive answer
-                    raw_msg2 = await ws.recv()
-                    msg2 = json.loads(raw_msg2)
-                    self.assertEqual(msg2.get("type"), "answer")
-                    self.assertIn("v=0", msg2.get("sdp", ""))
-
-                    # Send ping, verify pong
-                    await ws.send(json.dumps({"type": "ping"}))
-                    raw_msg3 = await ws.recv()
-                    msg3 = json.loads(raw_msg3)
-                    self.assertEqual(msg3.get("type"), "pong")
-
-            finally:
-                await client_pc.close()
-                await server.close()
-
-        asyncio.run(run_e2e())
 
 
 if __name__ == "__main__":
