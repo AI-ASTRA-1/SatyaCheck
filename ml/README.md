@@ -28,6 +28,8 @@ is a stub, and what the environment can currently do.
 | `eval/confidence.py` | k-NN distance from the in-domain reference, calibrated to 0 to 1. |
 | `tools/fit_confidence.py` | Fits the reference and measures how well it works. |
 | `tools/latency.py` | Per-window latency against the 180 ms stage 04 budget, CPU and GPU. |
+| `tools/correlate.py` | Regresses the score against measured channel statistics. Writes `correlation.csv` and a dependency-free `correlation.svg`. |
+| `eval/acoustics.py` | SNR, effective bandwidth, noise floor, spectral centroid, crest factor, plus Pearson and Spearman. |
 | `tools/handoff.py` | Stages the 1.2 GB the model actually needs onto another machine, and verifies it arrived. |
 | `eval/transplant.py` | `separation`, `gap`, and what each means at small n. |
 | `TRANSPLANT_CAPTURE.md` | The capture procedure, the five controls, and how to read the result. |
@@ -1014,6 +1016,54 @@ discovered on demo day.
 which runs XLS-R twice: 1030.8 ms on CPU, 59.9 ms on GPU. `score_and_embed` returns
 both from one forward and is bit-identical to calling them separately. That is where
 the 522.9 ms above comes from rather than 1030.8 ms.
+
+### No channel statistic predicts the score, 2026-09-08
+
+Branch B, hours 4 to 6, and it is a null result. `data/results/correlation.csv`, 76
+clips across five datasets, each measured for SNR, effective bandwidth, noise floor,
+spectral centroid, crest factor, speech level and clipping, then correlated against
+`synthetic_probability`. Plot in `correlation.svg`.
+
+| statistic | pooled r | pooled rho | asvspoof | ifd | internal | iPhone | Samsung |
+|---|---|---|---|---|---|---|---|
+| `snr_db` | -0.24 | -0.23 | -0.17 | +0.27 | -0.33 | +0.01 | +0.41 |
+| `effective_bandwidth_hz` | +0.25 | +0.18 | +0.16 | -0.15 | +0.30 | -0.40 | +0.38 |
+| `noise_floor_dbfs` | +0.19 | +0.25 | +0.16 | -0.32 | +0.12 | +0.18 | -0.44 |
+| `spectral_centroid_hz` | +0.24 | +0.16 | +0.11 | -0.14 | +0.45 | -0.40 | +0.31 |
+| `crest_factor_db` | -0.14 | -0.15 | -0.15 | +0.16 | +0.33 | -0.25 | +0.60 |
+| `speech_level_dbfs` | -0.21 | -0.02 | -0.09 | -0.05 | -0.63 | +0.20 | -0.55 |
+| `confidence` (not a channel statistic) | -0.13 | +0.22 | +0.25 | +0.37 | +0.36 | +0.41 | +0.38 |
+
+n per dataset: asvspoof 40, ifd 10, internal 6, replay_iphone 10, replay_samsung 10.
+
+**Nothing correlates, and the signs flip between datasets.** Every pooled |r| is at
+or below 0.25. Within datasets the magnitudes are larger but the *sign changes*:
+`crest_factor_db` runs -0.15, +0.16, +0.33, -0.25, +0.60 across the five. A cue the
+model actually used would keep its sign. These are small-sample noise, and the
+`internal` column at n=6 should not be read at all.
+
+**Why this matters more than a positive result would have.** Channel-replay
+augmentation needs a channel property to augment *against*. There is not one. The
+transplant already showed the score is driven by distance from the training
+distribution (r = -0.938 between a clip's starting score and how far the channel
+moved it); this says that distance is not reducible to SNR, bandwidth, noise floor,
+brightness or dynamics. It is the domain as a whole. That is the strongest argument
+in the file for Branch B over Branch A.
+
+**The one column with a consistent sign is confidence**, positive in all five
+datasets at +0.25 to +0.41. It is weak, and it is not a channel statistic; it is
+included as the comparison the channel statistics fail to beat.
+
+**A methodological note kept in the tool.** Pooling these corpora would confound
+dataset with statistic: ASVspoof is studio-clean and bimodal by class, ours are phone
+captures that score high regardless. Any statistic differing between the corpora
+would correlate with the score for that reason alone. Both figures are printed and
+the within-dataset ones are the ones to read. As it happens the pooled figures are
+also near zero, which makes the null cleaner rather than weaker.
+
+**Scope.** 76 clips, one checkpoint, five datasets of very unequal size. A null at
+this n does not prove no channel statistic could ever predict the score; it does say
+none of the five the brief names does so here.
 
 ### The integration seam for R2, 2026-09-08
 
