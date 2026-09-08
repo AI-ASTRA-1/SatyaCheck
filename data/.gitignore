@@ -14,6 +14,12 @@ replay/**
 !replay/**/
 !replay/**/capture_conditions.json
 
-# Everything else here is a CSV of measurements, and those are the point.
+# Everything else here is a CSV of measurements, and those are the point: the only
+# durable copy of the diagnosis for a teammate with no GPU, no ASVspoof corpus and
+# no replay audio to regenerate it from. Plots are excluded: a plot regenerates
+# deterministically from its CSV in one command (python -m ml.tools.correlate) and a
+# binary diff is useless in git either way.
 !results/
 !results/*.csv
+results/*.png
+results/*.svg

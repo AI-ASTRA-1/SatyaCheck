@@ -1072,6 +1072,11 @@ a dependency without asking. Asked, and installed into `.venv` directly rather t
 Raised in `QUESTIONS.md`. The numbers in `correlation.csv` did not change; only the
 plot format did.
 
+**`correlation.png` is gitignored, not committed.** It regenerates deterministically
+from `correlation.csv` in one command, and a binary diff is useless in git either
+way. The CSV is the durable artifact; run `python -m ml.tools.correlate` for the
+plot.
+
 ### The integration seam for R2, 2026-09-08
 
 ```python
