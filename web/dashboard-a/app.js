@@ -10,10 +10,6 @@
 (function () {
   'use strict';
 
-  // DOM Elements
-  const elBtnThemeToggle = document.getElementById('btn-theme-toggle');
-  const elThemeIcon = document.getElementById('theme-icon');
-  const elThemeLabel = document.getElementById('theme-label');
   const elConnDot = document.getElementById('connection-dot');
   const elConnText = document.getElementById('connection-text');
   const elBtnReconnect = document.getElementById('btn-reconnect');
@@ -159,18 +155,18 @@
   }
 
   function setConnectionState(state) {
-    elConnDot.className = 'status-dot ' + state;
+    if (elConnDot) elConnDot.className = 'status-dot ' + state;
     if (state === 'connected') {
       isConnected = true;
-      elConnText.textContent = 'Live Connected';
+      if (elConnText) elConnText.textContent = 'Live Connected';
       elBanner.classList.add('hidden');
     } else if (state === 'connecting') {
       isConnected = false;
-      elConnText.textContent = 'Connecting...';
+      if (elConnText) elConnText.textContent = 'Connecting...';
       elBanner.classList.remove('hidden');
     } else {
       isConnected = false;
-      elConnText.textContent = 'Disconnected';
+      if (elConnText) elConnText.textContent = 'Disconnected';
       elBanner.classList.remove('hidden');
     }
   }
@@ -443,31 +439,7 @@
     elHistoryCount.textContent = '0 items';
   }
 
-  function initTheme() {
-    const savedTheme = localStorage.getItem('satyacheck_theme') || 'dark';
-    applyTheme(savedTheme);
-  }
 
-  function applyTheme(theme) {
-    if (theme === 'bright') {
-      document.body.classList.remove('theme-dark');
-      document.body.classList.add('theme-bright');
-      if (elThemeIcon) elThemeIcon.textContent = '🌙';
-      if (elThemeLabel) elThemeLabel.textContent = 'Dark';
-    } else {
-      document.body.classList.remove('theme-bright');
-      document.body.classList.add('theme-dark');
-      if (elThemeIcon) elThemeIcon.textContent = '☀️';
-      if (elThemeLabel) elThemeLabel.textContent = 'Bright';
-    }
-  }
-
-  function toggleTheme() {
-    const isBright = document.body.classList.contains('theme-bright');
-    const newTheme = isBright ? 'dark' : 'bright';
-    localStorage.setItem('satyacheck_theme', newTheme);
-    applyTheme(newTheme);
-  }
 
   /**
    * Mock Simulation Control Channel
@@ -481,9 +453,6 @@
   }
 
   // Event Listeners
-  if (elBtnThemeToggle) {
-    elBtnThemeToggle.addEventListener('click', toggleTheme);
-  }
   if (elBtnPlayGenuine) {
     elBtnPlayGenuine.addEventListener('click', () => {
       sendControlMessage({ action: 'play', scenario: 'genuine' });
@@ -537,13 +506,12 @@
     });
   }
 
-  elBtnReconnect.addEventListener('click', connectWebSocket);
-  elBtnRetry.addEventListener('click', connectWebSocket);
-  elBtnClearHistory.addEventListener('click', clearHistory);
+  if (elBtnReconnect) elBtnReconnect.addEventListener('click', connectWebSocket);
+  if (elBtnRetry) elBtnRetry.addEventListener('click', connectWebSocket);
+  if (elBtnClearHistory) elBtnClearHistory.addEventListener('click', clearHistory);
 
   // Auto-connect on load
   window.addEventListener('DOMContentLoaded', () => {
-    initTheme();
     connectWebSocket();
   });
 })();

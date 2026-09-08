@@ -77,4 +77,4 @@ python -m pytest web/dashboard-a/test_mock_server.py -q
 
 ## Beyond the R5 spec
 
-The scenario-trigger toolbar (Genuine / Attack / Degraded / Stop, with auto-loop toggle) and the light/dark theme switch are extras added for demo convenience; the literal R5.md spec requires only a live risk view and a scrollable alert history.
+The scenario-trigger toolbar (Genuine / Attack / Degraded / Stop, with auto-loop toggle) is an extra added for demo convenience; the literal R5.md spec requires only a live risk view and a scrollable alert history.

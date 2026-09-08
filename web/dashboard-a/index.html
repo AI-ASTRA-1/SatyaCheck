@@ -9,37 +9,16 @@
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
-<body class="theme-dark">
+<body class="theme-bright">
   <div class="app-container">
     <!-- Top Navigation / Header -->
     <header class="app-header">
       <div class="brand-group">
-        <div class="brand-logo-ring">
-          <div class="radar-sweep"></div>
-          <span class="shield-icon">🛡️</span>
-        </div>
         <div>
           <div class="brand-title-row">
             <h1 class="brand-title">SATYACHECK</h1>
-            <span class="badge badge-prototype">Prototype A</span>
-            <span class="badge badge-sih">SIH26104</span>
           </div>
           <p class="brand-subtitle">Real Voice · Real Person · Real-Time Protection</p>
-        </div>
-      </div>
-
-      <div class="header-status-group">
-        <button id="btn-theme-toggle" class="btn btn-theme-toggle" title="Toggle Dark / Bright mode" aria-label="Toggle theme">
-          <span class="theme-icon" id="theme-icon">☀️</span>
-          <span class="theme-label" id="theme-label">Bright</span>
-        </button>
-        <div class="status-chip" id="connection-status-chip">
-          <span class="status-dot disconnected" id="connection-dot"></span>
-          <span class="status-text" id="connection-text">Disconnected</span>
-        </div>
-        <div class="ws-url-box">
-          <span class="ws-url-fixed mono" id="ws-url-display">ws://127.0.0.1:8765</span>
-          <button id="btn-reconnect" class="btn btn-secondary">Connect</button>
         </div>
       </div>
     </header>
@@ -113,34 +92,39 @@
 
     <!-- Main Layout (Full-Width Live Sections with Bottom Dropdown Lists) -->
     <main class="dashboard-main-full">
-      <!-- 1. Live Risk Verdict Hero Card (Full Width) -->
+      <!-- 1. Live Risk Scoring Hero (Single Unified Card with 50/50 Gauge & Details) -->
       <section class="live-section">
         <div class="card card-hero-risk" id="hero-risk-card">
           <div class="card-header">
-            <h2 class="card-title">Live Risk Scoring</h2>
+            <div class="header-left-group">
+              <h2 class="card-title">Live Risk Scoring & Telemetry</h2>
+              <span class="card-badge">Continuous Audio Stream</span>
+            </div>
             <div class="verdict-tag verdict-unknown" id="verdict-badge">VERDICT: UNKNOWN</div>
           </div>
 
-          <div class="risk-display-row">
-            <!-- Radial Gauge -->
-            <div class="gauge-container">
-              <svg class="radial-gauge" viewBox="0 0 160 160">
-                <circle class="gauge-bg" cx="80" cy="80" r="68"></circle>
-                <circle class="gauge-fill" id="gauge-fill-circle" cx="80" cy="80" r="68"></circle>
-              </svg>
-              <div class="gauge-inner-content">
-                <span class="score-value" id="risk-score-value">0</span>
-                <span class="score-scale">/ 100</span>
-                <span class="score-label">Risk Score</span>
+          <div class="risk-hero-layout">
+            <!-- Left 50%: Large Radial Gauge -->
+            <div class="gauge-hero-column">
+              <div class="gauge-container">
+                <svg class="radial-gauge" viewBox="0 0 160 160">
+                  <circle class="gauge-bg" cx="80" cy="80" r="68"></circle>
+                  <circle class="gauge-fill" id="gauge-fill-circle" cx="80" cy="80" r="68"></circle>
+                </svg>
+                <div class="gauge-inner-content">
+                  <span class="score-value" id="risk-score-value">0</span>
+                  <span class="score-scale">/ 100</span>
+                  <span class="score-label">Risk Score</span>
+                </div>
               </div>
             </div>
 
-            <!-- Risk Details -->
+            <!-- Right 50%: Risk Telemetry & Details -->
             <div class="risk-summary-details">
               <div class="detail-block">
                 <span class="detail-label">Risk Level</span>
                 <div class="risk-level-badge level-low" id="risk-level-badge">LOW</div>
-                <p class="risk-band-disclaimer">Backend policy maps score to RiskLevel state</p>
+                <p class="risk-band-disclaimer">Backend policy maps continuous score to RiskLevel state</p>
               </div>
 
               <div class="detail-block">
