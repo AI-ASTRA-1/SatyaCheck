@@ -117,8 +117,11 @@ def score_window(pcm_16k: np.ndarray, sample_rate: int = SAMPLE_RATE) -> WindowR
     embeddings: list[np.ndarray] = []
     for window in selection.windows:
         pcm = (np.clip(window, -1.0, 1.0) * 32767).astype("<i2").tobytes()
-        scores.append(scorer.score(pcm, SAMPLE_RATE))
-        embeddings.append(scorer.embed(pcm, SAMPLE_RATE))
+        # One forward pass for both. Calling score() then embed() runs XLS-R twice,
+        # which is half the stage 04 budget again on a CPU.
+        score, embedding = scorer.score_and_embed(pcm, SAMPLE_RATE)
+        scores.append(score)
+        embeddings.append(embedding)
 
     probability = float(np.mean(scores))
     if not np.isfinite(probability):

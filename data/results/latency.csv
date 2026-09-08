@@ -1,0 +1,11 @@
+run_id,device,model,operation,repeats,median_ms,min_ms,max_ms,budget_ms,within_budget,threads,notes
+latency,cpu,AASIST,score,10,201.226,194.215,221.625,180.0,NO,16,"Intel64 Family 6 Model 191 Stepping 2, GenuineIntel, torch 2.11.0+cu128, NVIDIA GeForce RTX 4070 Laptop GPU"
+latency,cpu,AASIST-L,score,10,159.777,146.121,164.974,180.0,yes,16,"Intel64 Family 6 Model 191 Stepping 2, GenuineIntel, torch 2.11.0+cu128, NVIDIA GeForce RTX 4070 Laptop GPU"
+latency,cpu,xlsr-aasist,score,10,415.528,400.153,449.319,180.0,NO,16,"Intel64 Family 6 Model 191 Stepping 2, GenuineIntel, torch 2.11.0+cu128, NVIDIA GeForce RTX 4070 Laptop GPU"
+latency,cpu,xlsr-aasist,score_and_embed,10,522.870,417.595,549.304,180.0,NO,16,"Intel64 Family 6 Model 191 Stepping 2, GenuineIntel, torch 2.11.0+cu128, NVIDIA GeForce RTX 4070 Laptop GPU"
+latency,cpu,xlsr-aasist,score_then_embed,10,1030.824,1015.208,1070.137,180.0,NO,16,"Intel64 Family 6 Model 191 Stepping 2, GenuineIntel, torch 2.11.0+cu128, NVIDIA GeForce RTX 4070 Laptop GPU"
+latency,cuda,AASIST,score,10,13.784,12.922,16.548,180.0,yes,16,"Intel64 Family 6 Model 191 Stepping 2, GenuineIntel, torch 2.11.0+cu128, NVIDIA GeForce RTX 4070 Laptop GPU"
+latency,cuda,AASIST-L,score,10,13.752,12.141,21.059,180.0,yes,16,"Intel64 Family 6 Model 191 Stepping 2, GenuineIntel, torch 2.11.0+cu128, NVIDIA GeForce RTX 4070 Laptop GPU"
+latency,cuda,xlsr-aasist,score,10,29.051,27.074,32.114,180.0,yes,16,"Intel64 Family 6 Model 191 Stepping 2, GenuineIntel, torch 2.11.0+cu128, NVIDIA GeForce RTX 4070 Laptop GPU"
+latency,cuda,xlsr-aasist,score_and_embed,10,31.527,27.255,36.097,180.0,yes,16,"Intel64 Family 6 Model 191 Stepping 2, GenuineIntel, torch 2.11.0+cu128, NVIDIA GeForce RTX 4070 Laptop GPU"
+latency,cuda,xlsr-aasist,score_then_embed,10,59.869,54.616,64.541,180.0,yes,16,"Intel64 Family 6 Model 191 Stepping 2, GenuineIntel, torch 2.11.0+cu128, NVIDIA GeForce RTX 4070 Laptop GPU"

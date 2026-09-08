@@ -27,6 +27,8 @@ is a stub, and what the environment can currently do.
 | `eval/gate.py` | The five rules and `headroom_traversed`. |
 | `eval/confidence.py` | k-NN distance from the in-domain reference, calibrated to 0 to 1. |
 | `tools/fit_confidence.py` | Fits the reference and measures how well it works. |
+| `tools/latency.py` | Per-window latency against the 180 ms stage 04 budget, CPU and GPU. |
+| `tools/handoff.py` | Stages the 1.2 GB the model actually needs onto another machine, and verifies it arrived. |
 | `eval/transplant.py` | `separation`, `gap`, and what each means at small n. |
 | `TRANSPLANT_CAPTURE.md` | The capture procedure, the five controls, and how to read the result. |
 | `eval/probes.py` | Seeded non-speech generators: white noise, pink noise, a synthesised chord bed, near-silence. Plus evenly spaced segment sampling. |
@@ -981,11 +983,65 @@ consequences:
 One clean recording, made per `RECORDING_SESSIONS.md` with processing off, separates
 them. Until that exists, neither explanation may be asserted.
 
-### Latency
+### Latency, CPU and GPU, 2026-09-08
 
-XLS-R + AASIST: 27 to 37 ms per 4 s window on the RTX 4070, comfortably inside the
-180 ms stage 04 budget. AASIST alone: 13 to 16 ms. Both cost seconds on the first
-call because loading is lazy, which is what `warmup()` exists for.
+`data/results/latency.csv`. Median and full range over 10 calls after warmup, 16
+torch threads, i9 plus RTX 4070 Laptop. The budget is the 180 ms stage 04 figure in
+`AGENTS.md`.
+
+| device | model | operation | median | range | verdict |
+|---|---|---|---|---|---|
+| cuda | xlsr-aasist | `score` | 29.1 ms | 27.1 to 32.1 | within |
+| cuda | xlsr-aasist | `score_and_embed` | 31.5 ms | 27.3 to 36.1 | within |
+| cuda | AASIST | `score` | 13.8 ms | 12.9 to 16.5 | within |
+| cuda | AASIST-L | `score` | 13.8 ms | 12.1 to 21.1 | within |
+| **cpu** | **xlsr-aasist** | `score` | **415.5 ms** | 400 to 449 | **2.3x over** |
+| **cpu** | **xlsr-aasist** | `score_and_embed` | **522.9 ms** | 418 to 549 | **2.9x over** |
+| cpu | AASIST | `score` | 201.2 ms | 194 to 222 | 1.1x over |
+| cpu | AASIST-L | `score` | 159.8 ms | 146 to 165 | within |
+
+**XLS-R + AASIST cannot meet the stage 04 budget on a CPU.** At 415 ms it is 2.3x
+over on its own, and 522 ms with the embedding the confidence estimator needs. It
+also breaks the 400 ms end-to-end figure the deck quotes, by itself, before any other
+stage runs. A machine without a GPU cannot run this check at the advertised latency.
+
+**The only model inside the budget on a CPU is AASIST-L at 159.8 ms**, and it is one
+of the checkpoints that is *inverted* on the IFD samples. So the CPU fallback is
+faster and discriminates worse, and that trade has to be stated rather than
+discovered on demo day.
+
+**One bug this found.** `api.score_window` originally called `score()` then `embed()`,
+which runs XLS-R twice: 1030.8 ms on CPU, 59.9 ms on GPU. `score_and_embed` returns
+both from one forward and is bit-identical to calling them separately. That is where
+the 522.9 ms above comes from rather than 1030.8 ms.
+
+### Moving the model to another machine
+
+`ml/tools/handoff.py`. **1.2 GB in five files, not the 6.45 GB the model directory
+holds**, verified by loading with everything else absent:
+
+| File | Size | Why |
+|---|---|---|
+| `Best_LA_model_for_DF.pth` | 1213 MB | every weight, front end and head |
+| `wav2vec2-xls-r-300m/config.json` | 1.5 KB | shapes only; the 1.2 GB `pytorch_model.bin` beside it is **never loaded** |
+| `ssl_aasist/model.py` | 19 KB | the published architecture |
+| `ssl_aasist/fairseq_to_hf.json` | 42 KB | the key mapping |
+| `confidence_reference.npz` | 228 KB | `api.py` refuses to load without it |
+
+`fairseq/xlsr2_300m.pt` (3.6 GB) produced the mapping once and is never read again.
+`faster-whisper-small/` and `spkrec-ecapa-voxceleb/` belong to checks that are still
+docstrings. `--with-aasist` adds 3.4 MB for the CPU fallback.
+
+```
+python -m ml.tools.handoff stage D:\satyacheck_models --with-aasist
+set SATYACHECK_MODEL_DIR=D:\satyacheck_models
+python -m ml.tools.handoff verify D:\satyacheck_models
+```
+
+`verify` checks a SHA256 per file **and** rescores a seeded probe window against the
+value recorded at staging. Matching bytes with different scores means the two
+environments differ, not the model, and that is worth finding before integration
+rather than during it.
 
 ## Augmentation
 

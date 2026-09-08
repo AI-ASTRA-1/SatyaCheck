@@ -110,6 +110,11 @@ class _FakeScorer:
     def embed(self, pcm_s16le: bytes, sample_rate: int) -> np.ndarray:
         return np.full(8, self._embedding, dtype=np.float32)
 
+    def score_and_embed(
+        self, pcm_s16le: bytes, sample_rate: int
+    ) -> tuple[float, np.ndarray]:
+        return self.score(pcm_s16le, sample_rate), self.embed(pcm_s16le, sample_rate)
+
 
 @pytest.fixture
 def wired(monkeypatch: pytest.MonkeyPatch) -> _FakeScorer:
