@@ -30,11 +30,23 @@ from ml.augment.gain import PRESETS, compress
 from ml.augment.noise import add_noise_at_snr
 from ml.augment.phone_codecs import CodecName, ffmpeg_available, phone_codec_round_trip
 from ml.checks.machine_fingerprint import MachineFingerprintCheck
+from ml.eval.activity import (
+    ACTIVITY_FLOOR,
+    STATUS_OK,
+    VAD_FAIL,
+    select_windows,
+)
 
 WINDOW_SAMPLES = 64600
 
-#: A window must be at least this fraction speech to be scored.
-ACTIVITY_FLOOR = 0.4
+#: Re-exported so the existing name keeps working for anything importing it.
+__all__ = [
+    "ACTIVITY_FLOOR",
+    "conditions",
+    "mean_score",
+    "read_wav",
+    "speech_windows",
+]
 
 
 def read_wav(path: Path) -> np.ndarray:
@@ -55,30 +67,14 @@ def read_wav(path: Path) -> np.ndarray:
 
 
 def speech_windows(x: np.ndarray) -> list[np.ndarray]:
-    """Windows that are mostly speech. Silence scores differently and would skew.
+    """Speech-active windows. Silence scores differently and would skew the mean.
 
-    The gate is **relative to this file's own speech level**, not an absolute
-    amplitude. An absolute threshold discards nearly all of a quietly recorded clip
-    and returns nan, which is worse than a wrong number because it looks like a
-    tooling failure rather than a silent bias. A headset recording at active RMS
-    0.018 lost all but 4 of its windows to a fixed 0.01 gate.
+    Thin wrapper over `ml.eval.activity.select_windows`, kept because the windowing
+    is now shared with `ml/tools/baseline.py` and the fallback behaviour needed
+    tests of its own. The ordinary path is unchanged, so every figure already in
+    `ml/README.md` still reproduces.
     """
-    frames_all = x[: len(x) // 320 * 320].reshape(-1, 320)
-    frame_rms = np.sqrt((frames_all**2).mean(axis=1) + 1e-12)
-    if frame_rms.size == 0:
-        return []
-    # 15% of a robust "loud speech" level. Percentile rather than max so one click
-    # or thump cannot raise the bar for the whole file.
-    gate = max(float(np.percentile(frame_rms, 95)) * 0.15, 1e-4)
-
-    out = []
-    for i in range(len(x) // WINDOW_SAMPLES):
-        chunk = x[i * WINDOW_SAMPLES : (i + 1) * WINDOW_SAMPLES]
-        frames = chunk[: len(chunk) // 320 * 320].reshape(-1, 320)
-        active = float((np.sqrt((frames**2).mean(axis=1)) > gate).mean())
-        if active > ACTIVITY_FLOOR:
-            out.append(chunk)
-    return out
+    return select_windows(x, WINDOW_SAMPLES).windows
 
 
 def conditions(x: np.ndarray, rng: np.random.Generator) -> dict[str, np.ndarray]:
@@ -98,10 +94,32 @@ def conditions(x: np.ndarray, rng: np.random.Generator) -> dict[str, np.ndarray]
     return built
 
 
-def mean_score(check: MachineFingerprintCheck, x: np.ndarray) -> tuple[float, int]:
-    windows = speech_windows(x)
+def mean_score(
+    check: MachineFingerprintCheck, x: np.ndarray
+) -> dict[str, object]:
+    """Mean P(synthetic) over speech-active windows, and how it was arrived at.
+
+    Returns `score: None` with `vad_status: "FAIL"` when no window could be scored,
+    never `nan`. A missing score and a high score are different facts, and a caller
+    that formats `nan` into a table has silently turned the first into the second.
+    Anything consuming `score` must branch on `None` rather than coercing it.
+
+    The status matters separately: a figure from the `sparse` fallback rests on one
+    salvaged window and should not be read as equal to one averaged over sixteen.
+    """
+    selection = select_windows(x, WINDOW_SAMPLES)
+    windows, status = selection.windows, selection.status
+    result: dict[str, object] = {
+        "score": None,
+        "vad_status": selection.vad_status,
+        "status": status,
+        "reason": selection.reason,
+        "speech_s": selection.speech_seconds,
+        "duration_s": x.size / CANONICAL_SAMPLE_RATE,
+        "windows": 0,
+    }
     if not windows:
-        return float("nan"), 0
+        return result
     started = datetime.now(UTC)
     context = CallContext(stream_id="sweep", call_id="sweep", started_at=started)
     scores = []
@@ -118,10 +136,19 @@ def mean_score(check: MachineFingerprintCheck, x: np.ndarray) -> tuple[float, in
             capture_ended_at=started + timedelta(seconds=len(chunk) / 16000),
             window_ms=int(len(chunk) / 16000 * 1000),
         )
-        result = check.run(batch, context)
-        if isinstance(result.signal, MachineFingerprintSignal):
-            scores.append(result.signal.synthetic_probability)
-    return (float(np.mean(scores)) if scores else float("nan")), len(scores)
+        outcome = check.run(batch, context)
+        if isinstance(outcome.signal, MachineFingerprintSignal):
+            scores.append(outcome.signal.synthetic_probability)
+    if not scores:
+        # Windows were selected but the scorer refused every one of them. That is a
+        # model failure rather than a silence failure, so it reports FAIL with its
+        # own reason instead of borrowing the selection's.
+        result["vad_status"] = VAD_FAIL
+        result["reason"] = f"scorer returned no signal for {len(windows)} windows"
+        return result
+    result["score"] = float(np.mean(scores))
+    result["windows"] = len(scores)
+    return result
 
 
 def build_check(
@@ -139,6 +166,18 @@ def build_check(
         scorer = AasistScorer(model, device=device, weights_override=weights)
     scorer.warmup()  # type: ignore[attr-defined]
     return MachineFingerprintCheck(scorer)  # type: ignore[arg-type]
+
+
+def _cell(score: float | None) -> str:
+    """A cell in the table. `FAIL` where there is no score, never a number."""
+    return f"{score:>7.3f}" if score is not None else f"{VAD_FAIL:>7}"
+
+
+def _delta_cell(score: float | None, reference: float | None) -> str:
+    """A delta cell. Absent on either side means no delta exists, not zero."""
+    if score is None or reference is None:
+        return f"{'-':>7}"
+    return f"{score - reference:>+7.3f}"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -160,18 +199,30 @@ def main(argv: list[str] | None = None) -> int:
     check = build_check(args.model, args.device, args.weights)
     rng = np.random.default_rng(args.seed)
 
-    rows: dict[str, dict[str, float]] = {}
+    rows: dict[str, dict[str, float | None]] = {}
     names: list[str] = []
     for path in args.audio:
         x = read_wav(path)
         built = conditions(x, rng)
         if not names:
             names = list(built)
-        row = {}
+        row: dict[str, float | None] = {}
         windows = 0
+        status = STATUS_OK
         for name in names:
-            row[name], windows = mean_score(check, built[name])
-        rows[f"{path.stem} [{windows}w]"] = row
+            outcome = mean_score(check, built[name])
+            row[name] = outcome["score"]  # type: ignore[assignment]
+            windows = int(outcome["windows"])  # type: ignore[arg-type]
+            status = str(outcome["status"])
+            if outcome["vad_status"] == VAD_FAIL:
+                print(
+                    f"  {path.stem}/{name}: no score, {outcome['reason']}",
+                    file=sys.stderr,
+                )
+        # The status rides on the label, so a salvaged figure is never read as a
+        # clean one further down the page.
+        marker = "" if status == STATUS_OK else f" {status}"
+        rows[f"{path.stem} [{windows}w{marker}]"] = row
         print(f"scored {path.name}", file=sys.stderr)
 
     print(f"\nmean P(synthetic), model={args.model}, speech-active windows only\n")
@@ -179,14 +230,14 @@ def main(argv: list[str] | None = None) -> int:
     print(header)
     print("-" * len(header))
     for label, row in rows.items():
-        print(f"{label:>26} " + " ".join(f"{row[n]:>7.3f}" for n in names))
+        print(f"{label:>26} " + " ".join(_cell(row[n]) for n in names))
 
     print("\ndelta from source\n")
     print(f"{'clip':>26} " + " ".join(f"{n:>7}" for n in names[1:]))
     for label, row in rows.items():
         print(
             f"{label:>26} "
-            + " ".join(f"{row[n] - row['source']:>+7.3f}" for n in names[1:])
+            + " ".join(_delta_cell(row[n], row["source"]) for n in names[1:])
         )
 
     print("\nEvidence, not a verdict. n is small; report the clip count with any figure.")

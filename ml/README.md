@@ -16,6 +16,7 @@ is a stub, and what the environment can currently do.
 | `train/` | Built and tested: ASVspoof 2019 LA dataset with the phone channel applied per epoch, fine-tuning loop, EER. |
 | `eval/` | Built and tested: EER, DET curve, normalised cost-weighted DCF with deployment presets. |
 | calibration | Not started. |
+| `tools/frozen_config.py` | Reads the frozen diagnosis config out of the running code. `FROZEN.md` at the repo root is transcribed from it, and `tests/test_frozen_config.py` fails if the two drift apart. |
 | `BENCHMARK_FORMAT.md` | File format, metadata and labelling spec. Applies now; the 30-plus speaker benchmark it describes is a later phase. |
 | `RECORDING_SESSIONS.md` | Field guide for whoever runs the session: room, device, 6-speaker protocol. |
 | `RECORDING_SCRIPTS.md` | Printable handout, one card per speaker, four takes each. |
@@ -52,6 +53,25 @@ What it does not support: a false positive rate. Six speakers with a clean sweep
 bound the true rate at only about 50%. Nothing from these recordings is described as
 a false positive rate, and every figure drawn from them states `n = 6 speakers`,
 however many analysis windows went into it.
+
+## The frozen config, 2026-09-08
+
+The H+0 to H+4 diagnosis runs every experiment against one configuration, recorded in
+`FROZEN.md` at the repo root: `xlsr-aasist` on `Best_LA_model_for_DF.pth`, 4.0375 s
+windows, activity floor 0.4, ffmpeg canonicalisation at 16 kHz mono s16le. Read it
+out with
+
+```
+.venv\Scripts\python.exe -m ml.tools.frozen_config
+```
+
+**The two fine-tuned AASIST checkpoints are not frozen and produce none of the
+diagnosis numbers.** `xlsr-aasist` was chosen because it is the only model showing
+separation on independent audio, and the channel transplant needs a separation that
+can collapse. One consequence worth stating plainly: the anchors for that config are
+ASVspoof bonafide 0.000, IFD `pc` 0.029 and 0.847, own genuine 0.436 to 0.992, clone
+0.938. The 0.005 to 0.006 and 0.720 to 0.969 figures elsewhere in this file are
+AASIST numbers and are not regression checks for it.
 
 ## Running it
 
@@ -371,10 +391,51 @@ audio; ours is consumer phone capture. The remaining cue is therefore more likel
 our recording channel than accent as such, and that is now an open question rather
 than a settled one. It should not be written up as solved in either direction.
 
-**One tool defect.** `sadhguru_deepfake` returns nan in most columns because no
-window passes `sweep.py`'s 0.4 activity floor on a 6 s clip. The AGC and SNR columns
-resolve, so the file is readable and the gate is too aggressive for short clips.
-Not fixed yet.
+**One tool defect, fixed 2026-09-08.** `sadhguru_deepfake` returned nan in most
+columns because no window passed `sweep.py`'s 0.4 activity floor on a 6 s clip. The
+gate now falls back to a quarter hop and then to the single most speech-active
+window, and reports how it got there; a score that cannot be produced is `None` with
+`vad_status FAIL` and a reason, never nan. See "Which 4 s window you score decides
+the answer" below, because fixing it turned up something larger.
+
+### Which 4 s window you score decides the answer, 2026-09-08
+
+Found while fixing the `sadhguru_deepfake` nan, and it is more serious than the bug
+was. XLS-R + AASIST, one 6.03 s IFD deepfake clip, four overlapping 4.0375 s windows
+at a hop of 0.505 s. Nothing changes between rows but where the window starts:
+
+| window start | speech fraction | P(synthetic) |
+|---|---|---|
+| 0.000 s | 0.279 | **0.9972** |
+| 0.505 s | 0.269 | 0.7585 |
+| 1.009 s | 0.318 | 0.1279 |
+| 1.514 s | 0.383 | **0.0024** |
+
+**The score spans 0.0024 to 0.9972 on one file, a range of 0.995.** Half a second of
+offset moves it further than any channel degradation we have measured. And the
+ordering runs the wrong way: the *more* speech a window contains, the *lower* it
+scores. The window with the least speech scores 0.997.
+
+**This explains a discrepancy in the IFD table above.** The 0.999 recorded there for
+`sadhguru` deepfake came from `score_file.py`, which takes fixed 4000 ms windows from
+the start of the file and therefore scored window 0. `sweep.py` picks the most
+speech-active window and gets 0.128. Both numbers are real and neither is the file's
+score, because on this clip the file does not have one.
+
+**Consequences, and the second is the one that matters.**
+
+1. **Any single-clip figure in this file that came from a short recording carries an
+   unstated window-selection choice.** Figures from the 60-plus second recordings
+   average over 15 or more windows and are far less exposed; the 5 to 6 s IFD clips
+   hold one window on the grid and are fully exposed.
+2. **It is evidence about what the model responds to.** A detector reading synthesis
+   artifacts should not care where a 4 s window starts inside continuous speech from
+   one generator, and should not score quieter windows as more synthetic. This points
+   the same way as the level finding did: the response is dominated by something
+   other than the speech content. It is one clip, so it is a lead, not a conclusion.
+
+**Scope.** n=1 clip, 4 window positions, one model. It does not establish that every
+file behaves this way. The OOD probe and the baseline measure how general it is.
 
 ### The Exotel channel alone destroys the detector, 2026-09-08
 

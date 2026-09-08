@@ -201,3 +201,19 @@ closes that for `ml/` only.
 **What I need:** R2 to delete line 3 of the root `.gitignore`, commit the file so
 everyone gets it, and add `*.mp4`, `*.mpeg`, `*.m4a`, `*.aac`, `*.ogg` and `*.webm`
 to it.
+
+## R1 (ML) - 2026-09-08 - FILES CREATED OUTSIDE ml/, flagging rather than doing it silently
+
+**Blocked on:** `roles/R1.md` says R1 owns `ml/` and may not create files elsewhere.
+
+**What I tried:** The H+0 diagnosis brief specifies `FROZEN.md` at the repo root and
+diagnostic CSVs under `data/results/`. Both sit outside `ml/`. I raised it, was told
+to use the paths as written, and have done so. `FROZEN.md` now exists at the root and
+`data/results/` will hold `baseline.csv`, `ood.csv` and `transplant.csv`.
+
+Everything else stays inside `ml/`: `ml/tools/frozen_config.py` reads the config out
+of the running code, and `ml/tests/test_frozen_config.py` fails if `FROZEN.md` drifts
+away from the constants it claims to describe.
+
+**What I need:** R2 to confirm the root is where these belong, or name a folder under
+`ml/` and I will move them. No one else's files were touched either way.
