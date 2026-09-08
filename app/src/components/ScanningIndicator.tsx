@@ -32,7 +32,7 @@ export function ScanningIndicator() {
   return (
     <View style={styles.container}>
       <Animated.View style={[styles.dot, { opacity }]} />
-      <Text style={styles.text}>Analysing call audio</Text>
+      <Text style={styles.text}>Analysing live call audio...</Text>
     </View>
   );
 }
@@ -41,17 +41,25 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
-    paddingVertical: 8,
+    gap: 8,
+    backgroundColor: "#f0fdf4",
+    borderWidth: 1,
+    borderColor: "#bbf7d0",
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    alignSelf: "flex-start",
   },
   dot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: "#22c55e",
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#16a34a",
   },
   text: {
-    color: "#9ca3af",
-    fontSize: 14,
+    color: "#166534",
+    fontSize: 13,
+    fontWeight: "600",
   },
 });
+

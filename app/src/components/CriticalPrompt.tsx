@@ -25,11 +25,11 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: "row",
     alignItems: "flex-start",
-    backgroundColor: "rgba(185, 28, 28, 0.15)",
+    backgroundColor: "#fef2f2",
     borderWidth: 1,
-    borderColor: "#b91c1c",
-    borderRadius: 8,
-    padding: 12,
+    borderColor: "#fca5a5",
+    borderRadius: 10,
+    padding: 14,
     gap: 10,
     marginTop: 12,
   },
@@ -40,9 +40,11 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   text: {
-    color: "#fca5a5",
-    fontSize: 14,
-    lineHeight: 20,
+    color: "#7f1d1d",
+    fontSize: 13,
+    lineHeight: 19,
+    fontWeight: "500",
     flex: 1,
   },
 });
+

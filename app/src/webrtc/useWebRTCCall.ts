@@ -67,6 +67,8 @@ export function useWebRTCCall() {
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
   const ingestWsRef = useRef<WebSocket | null>(null);
+  const incomingOfferRef = useRef<string>("");
+
 
   // ---- Helpers -----------------------------------------------------------
 
@@ -179,7 +181,8 @@ export function useWebRTCCall() {
   // ---- Receiver: accept() ------------------------------------------------
 
   const accept = useCallback(
-    async (callId: string, offerSdp: string) => {
+    async (callId: string, offerSdp?: string) => {
+      const sdp = offerSdp || incomingOfferRef.current;
       setRole("receiver");
       setCallState({ status: "active", callId });
 
@@ -193,7 +196,7 @@ export function useWebRTCCall() {
       );
 
       await pc.setRemoteDescription(
-        new RTCSessionDescription({ type: "offer", sdp: offerSdp })
+        new RTCSessionDescription({ type: "offer", sdp })
       );
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer as RTCSessionDescription);
@@ -233,6 +236,7 @@ export function useWebRTCCall() {
 
       case "incoming_call":
         // Receiver: show incoming call UI. Accept is triggered by the user pressing Accept.
+        incomingOfferRef.current = lastMessage.sdp;
         setRole("receiver");
         setCallState({ status: "ringing", callId: lastMessage.call_id });
         break;
@@ -268,6 +272,7 @@ export function useWebRTCCall() {
         setRole(null);
         break;
 
+
       case "error":
         cleanup();
         disconnectSignalling();
@@ -291,7 +296,7 @@ export function useWebRTCCall() {
     role,
     sigState,
     dial,
-    accept: (callId: string, offerSdp: string) => accept(callId, offerSdp),
+    accept: (callId: string, offerSdp?: string) => accept(callId, offerSdp),
     hangup,
     connectSignalling,
   };

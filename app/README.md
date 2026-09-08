@@ -12,8 +12,10 @@ Owner: React Native / Expo lead. Folder: `app/`. Do not edit outside this folder
 | Android SYSTEM_ALERT_WINDOW native module | `modules/overlay/` |
 | Overlay control hook | `src/overlay/useOverlay.ts` |
 | Main screen (scanning / live / ended states) | `src/screens/OverlayScreen.tsx` |
+| WebRTC call screen (fallback calling UI) | `src/screens/CallScreen.tsx` |
 | Alert history screen | `src/screens/AlertHistoryScreen.tsx` |
-| Colour tokens | `src/theme.ts` |
+| Pristine light theme & colour tokens | `src/theme.ts` |
+
 
 Round 2 items (not built, not in this folder): Family Vault enrolment UI, settings screen,
 transcript warnings, payment blocking.

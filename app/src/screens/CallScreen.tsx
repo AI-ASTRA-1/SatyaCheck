@@ -75,14 +75,8 @@ export function CallScreen({ riskState, onBack }: Props) {
   }, [callIdInput, dial]);
 
   const handleAccept = useCallback(() => {
-    // The offer SDP arrived in callState when status was set to "ringing".
-    // We retrieve it from the last signalling message via the hook's internal state.
-    // The hook's accept() will be triggered from here; offerSdp is stored internally.
     if (callState.status === "ringing" && incomingCallId) {
-      // The hook stores the offer SDP internally -- we pass the callId only.
-      // The accept() signature expects (callId, offerSdp); offerSdp is in lastMessage.
-      // CallScreen gets it from the hook's exposed incomingOffer below.
-      accept(incomingCallId, ""); // offerSdp injected by useWebRTCCall internally
+      accept(incomingCallId);
     }
   }, [accept, callState.status, incomingCallId]);
 
@@ -116,7 +110,7 @@ export function CallScreen({ riskState, onBack }: Props) {
             value={callIdInput}
             onChangeText={setCallIdInput}
             placeholder="call_..."
-            placeholderTextColor="#374151"
+            placeholderTextColor="#94a3b8"
             autoCapitalize="none"
             autoCorrect={false}
           />
@@ -135,7 +129,7 @@ export function CallScreen({ riskState, onBack }: Props) {
 
         {sigState === "connected" && (
           <Text style={styles.connectedHint}>
-            Waiting for incoming calls...
+            Connected. Waiting for incoming calls...
           </Text>
         )}
         {sigState === "connecting" && (
@@ -281,18 +275,24 @@ function DetailRow({ label, value }: { label: string; value: string }) {
 // ---- Styles -------------------------------------------------------------
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: "#0f0f0f" },
+  safe: { flex: 1, backgroundColor: "#f8fafc" },
   header: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
     paddingVertical: 14,
+    backgroundColor: "#ffffff",
     borderBottomWidth: 1,
-    borderBottomColor: "#1f1f1f",
+    borderBottomColor: "#e2e8f0",
   },
-  title: { color: "#ffffff", fontSize: 16, fontWeight: "700", letterSpacing: 1 },
-  backText: { color: "#6b7280", fontSize: 14 },
+  title: {
+    color: "#0f172a",
+    fontSize: 17,
+    fontWeight: "800",
+    letterSpacing: 1,
+  },
+  backText: { color: "#475569", fontSize: 14, fontWeight: "600" },
 
   section: {
     flex: 1,
@@ -302,83 +302,106 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   sectionTitle: {
-    color: "#ffffff",
+    color: "#0f172a",
     fontSize: 20,
-    fontWeight: "600",
-    textAlign: "center",
-  },
-  incomingTitle: {
-    color: "#ef4444",
-    fontSize: 22,
     fontWeight: "700",
     textAlign: "center",
   },
-  callIdText: { color: "#9ca3af", fontSize: 13, fontFamily: "monospace" },
-  hint: { color: "#6b7280", fontSize: 13, textAlign: "center" },
-  connectedHint: { color: "#22c55e", fontSize: 12, textAlign: "center" },
-  errorHint: { color: "#ef4444", fontSize: 12, textAlign: "center" },
+  incomingTitle: {
+    color: "#b91c1c",
+    fontSize: 22,
+    fontWeight: "800",
+    textAlign: "center",
+  },
+  callIdText: { color: "#475569", fontSize: 13, fontFamily: "monospace" },
+  hint: { color: "#64748b", fontSize: 13, textAlign: "center" },
+  connectedHint: { color: "#15803d", fontSize: 12, textAlign: "center", fontWeight: "600" },
+  errorHint: { color: "#b91c1c", fontSize: 12, textAlign: "center" },
 
   inputRow: { flexDirection: "row", gap: 8, width: "100%" },
   input: {
     flex: 1,
-    backgroundColor: "#1a1a1a",
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    color: "#ffffff",
-    fontSize: 13,
+    backgroundColor: "#ffffff",
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    color: "#0f172a",
+    fontSize: 14,
     fontFamily: "monospace",
-    borderWidth: 1,
-    borderColor: "#374151",
+    borderWidth: 1.5,
+    borderColor: "#cbd5e1",
   },
   genBtn: {
-    backgroundColor: "#1f2937",
-    borderRadius: 8,
-    paddingHorizontal: 12,
+    backgroundColor: "#f1f5f9",
+    borderRadius: 10,
+    paddingHorizontal: 14,
     justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
   },
-  genBtnText: { color: "#9ca3af", fontSize: 12 },
+  genBtnText: { color: "#334155", fontSize: 13, fontWeight: "600" },
 
   primaryBtn: {
     backgroundColor: "#2563eb",
-    borderRadius: 10,
+    borderRadius: 12,
     paddingVertical: 14,
     paddingHorizontal: 40,
     alignItems: "center",
   },
-  primaryBtnText: { color: "#ffffff", fontSize: 15, fontWeight: "600" },
+  primaryBtnText: { color: "#ffffff", fontSize: 15, fontWeight: "700" },
   btnDisabled: { opacity: 0.4 },
 
   endBtn: {
-    backgroundColor: "#ef4444",
-    borderRadius: 10,
+    backgroundColor: "#dc2626",
+    borderRadius: 12,
     paddingVertical: 14,
     paddingHorizontal: 32,
     alignItems: "center",
   },
-  endBtnText: { color: "#ffffff", fontSize: 15, fontWeight: "600" },
+  endBtnText: { color: "#ffffff", fontSize: 15, fontWeight: "700" },
 
   acceptBtn: {
-    backgroundColor: "#22c55e",
-    borderRadius: 10,
+    backgroundColor: "#16a34a",
+    borderRadius: 12,
     paddingVertical: 14,
     paddingHorizontal: 32,
     alignItems: "center",
   },
-  acceptBtnText: { color: "#ffffff", fontSize: 15, fontWeight: "600" },
+  acceptBtnText: { color: "#ffffff", fontSize: 15, fontWeight: "700" },
 
   incomingBtns: { flexDirection: "row", gap: 16 },
 
-  detailRows: { width: "100%", gap: 10 },
+  detailRows: {
+    width: "100%",
+    gap: 10,
+    backgroundColor: "#ffffff",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    padding: 16,
+    shadowColor: "#0f172a",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
+  },
   row: { flexDirection: "row", justifyContent: "space-between" },
-  rowLabel: { color: "#6b7280", fontSize: 13 },
-  rowValue: { color: "#e5e7eb", fontSize: 13, fontWeight: "500" },
+  rowLabel: { color: "#64748b", fontSize: 13, fontWeight: "500" },
+  rowValue: { color: "#0f172a", fontSize: 13, fontWeight: "700" },
 
   summaryCard: {
-    backgroundColor: "#1a1a1a",
-    borderRadius: 10,
-    padding: 14,
+    backgroundColor: "#ffffff",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    padding: 18,
     width: "100%",
-    gap: 8,
+    gap: 10,
+    shadowColor: "#0f172a",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
   },
 });
+
