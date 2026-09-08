@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SatyaCheck WebRTC P2P Test Client</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      max-width: 720px;
+      margin: 30px auto;
+      padding: 24px;
+      background: #0f172a;
+      color: #f8fafc;
+      border-radius: 12px;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+    }
+    h1 { font-size: 1.6rem; color: #38bdf8; margin-bottom: 0.2rem; }
+    p { color: #94a3b8; font-size: 0.95rem; margin-top: 0; }
+    .card {
+      background: #1e293b;
+      padding: 18px;
+      border-radius: 8px;
+      margin-bottom: 16px;
+      border: 1px solid #334155;
+    }
+    .form-group {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    label { font-weight: 600; width: 140px; color: #cbd5e1; font-size: 0.9rem; }
+    input, select {
+      background: #0f172a;
+      border: 1px solid #475569;
+      color: #f8fafc;
+      padding: 8px 12px;
+      border-radius: 6px;
+      flex: 1;
+      font-size: 0.9rem;
+    }
+    .controls { display: flex; gap: 10px; margin-top: 14px; }
+    button {
+      padding: 10px 18px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      border-radius: 6px;
+      border: none;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-primary { background: #0284c7; color: white; }
+    .btn-primary:hover { background: #0369a1; }
+    .btn-success { background: #16a34a; color: white; }
+    .btn-success:hover { background: #15803d; }
+    .btn-danger { background: #dc2626; color: white; }
+    .btn-danger:hover { background: #b91c1c; }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+    .log-box {
+      background: #020617;
+      color: #4ade80;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      padding: 14px;
+      border-radius: 8px;
+      height: 240px;
+      overflow-y: auto;
+      font-size: 0.85rem;
+      border: 1px solid #1e293b;
+    }
+    .status-badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 0.8rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      background: #334155;
+      color: #94a3b8;
+    }
+    .status-active { background: #166534; color: #4ade80; }
+    .status-calling { background: #854d0e; color: #fde047; }
+  </style>
+</head>
+<body>
+  <h1>SatyaCheck WebRTC P2P Test Client</h1>
+  <p>Tests pure WebSocket signalling (port 8766) and audio ingest (port 8767).</p>
+
+  <div class="card">
+    <div class="form-group">
+      <label for="peerRole">Role:</label>
+      <select id="peerRole" onchange="onRoleChange()">
+        <option value="caller">Phone A (Caller - Initiates Dial)</option>
+        <option value="receiver" selected>Phone B (Receiver - Taps & Forwards Audio)</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label for="sigUrl">Signalling WS:</label>
+      <input type="text" id="sigUrl" value="ws://localhost:8766">
+    </div>
+    <div class="form-group">
+      <label for="ingestUrl">Audio Ingest WS:</label>
+      <input type="text" id="ingestUrl" value="ws://localhost:8767">
+    </div>
+    <div class="form-group">
+      <label for="callId">Call ID:</label>
+      <input type="text" id="callId" value="demo-call-001">
+    </div>
+    <div style="margin-top: 10px;">
+      Status: <span id="statusBadge" class="status-badge">Idle</span>
+    </div>
+    <div class="controls">
+      <button id="actionBtn" class="btn-primary" onclick="handlePrimaryAction()">Connect Receiver</button>
+      <button id="hangupBtn" class="btn-danger" onclick="hangup()" disabled>Hang Up</button>
+    </div>
+  </div>
+
+  <div class="log-box" id="logBox"></div>
+
+  <script>
+    let sigWs = null;
+    let ingestWs = null;
+    let pc = null;
+    let localStream = null;
+    let currentCallId = "";
+
+    function log(msg) {
+      const box = document.getElementById("logBox");
+      const time = new Date().toLocaleTimeString();
+      box.innerHTML += `[${time}] ${msg}<br/>`;
+      box.scrollTop = box.scrollHeight;
+    }
+
+    function setStatus(text, type = "idle") {
+      const badge = document.getElementById("statusBadge");
+      badge.innerText = text;
+      badge.className = "status-badge " + (type === "active" ? "status-active" : type === "calling" ? "status-calling" : "");
+    }
+
+    function onRoleChange() {
+      const role = document.getElementById("peerRole").value;
+      const btn = document.getElementById("actionBtn");
+      if (role === "caller") {
+        btn.innerText = "Dial Call (Phone A)";
+        btn.className = "btn-success";
+      } else {
+        btn.innerText = "Connect Receiver (Phone B)";
+        btn.className = "btn-primary";
+      }
+    }
+
+    async function handlePrimaryAction() {
+      const role = document.getElementById("peerRole").value;
+      currentCallId = document.getElementById("callId").value;
+      const sigUrl = document.getElementById("sigUrl").value;
+
+      if (role === "caller") {
+        await startCallerFlow(sigUrl, currentCallId);
+      } else {
+        await startReceiverFlow(sigUrl);
+      }
+    }
+
+    async function startCallerFlow(sigUrl, callId) {
+      log(`[Phone A] Connecting to signalling broker at ${sigUrl}...`);
+      sigWs = new WebSocket(sigUrl);
+
+      sigWs.onopen = async () => {
+        log("[Phone A] Signalling connected. Acquiring microphone...");
+        try {
+          localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+          log("[Phone A] Microphone acquired. Creating WebRTC PeerConnection...");
+
+          pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] });
+
+          localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+
+          pc.onicecandidate = (evt) => {
+            if (evt.candidate && sigWs && sigWs.readyState === WebSocket.OPEN) {
+              sigWs.send(JSON.stringify({
+                type: "ice",
+                call_id: callId,
+                candidate: evt.candidate
+              }));
+            }
+          };
+
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+
+          log(`[Phone A] Sending 'dial' with SDP offer for call_id: ${callId}...`);
+          sigWs.send(JSON.stringify({
+            type: "dial",
+            call_id: callId,
+            sdp: offer.sdp
+          }));
+
+          setStatus("Dialing...", "calling");
+          document.getElementById("actionBtn").disabled = true;
+          document.getElementById("hangupBtn").disabled = false;
+        } catch (err) {
+          log(`[Phone A] Error initializing call: ${err.message}`);
+          hangup();
+        }
+      };
+
+      sigWs.onmessage = async (evt) => {
+        const msg = JSON.parse(evt.data);
+        log(`[Phone A] Rx signalling: ${msg.type}`);
+
+        if (msg.type === "ringing") {
+          log("[Phone A] Call is ringing on callee device...");
+          setStatus("Ringing...", "calling");
+        } else if (msg.type === "answer") {
+          log("[Phone A] Received SDP answer from Phone B! Applying remote description...");
+          await pc.setRemoteDescription(new RTCSessionDescription({ type: "answer", sdp: msg.sdp }));
+          log("[Phone A] Remote description set. WebRTC P2P Call Connected!");
+          setStatus("In Call (P2P Active)", "active");
+        } else if (msg.type === "ice") {
+          if (pc && msg.candidate) {
+            log("[Phone A] Received remote ICE candidate from Phone B.");
+            await pc.addIceCandidate(new RTCIceCandidate(msg.candidate));
+          }
+        } else if (msg.type === "call_ended") {
+          log("[Phone A] Call ended signal received.");
+          hangup();
+        } else if (msg.type === "error") {
+          log(`[Phone A] Signalling error: ${msg.reason}`);
+        }
+      };
+
+      sigWs.onclose = () => {
+        log("[Phone A] Signalling WebSocket closed.");
+      };
+    }
+
+    async function startReceiverFlow(sigUrl) {
+      log(`[Phone B] Connecting to signalling broker at ${sigUrl}...`);
+      sigWs = new WebSocket(sigUrl);
+
+      sigWs.onopen = () => {
+        log("[Phone B] Connected to signalling. Waiting for incoming call...");
+        setStatus("Waiting for Call", "calling");
+        document.getElementById("actionBtn").disabled = true;
+        document.getElementById("hangupBtn").disabled = false;
+      };
+
+      sigWs.onmessage = async (evt) => {
+        const msg = JSON.parse(evt.data);
+        log(`[Phone B] Rx signalling: ${msg.type}`);
+
+        if (msg.type === "incoming_call") {
+          currentCallId = msg.call_id;
+          log(`[Phone B] INCOMING CALL received! Call ID: ${currentCallId}`);
+          log("[Phone B] Setting up WebRTC PeerConnection and setting offer SDP...");
+
+          pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] });
+
+          pc.onicecandidate = (evt) => {
+            if (evt.candidate && sigWs && sigWs.readyState === WebSocket.OPEN) {
+              sigWs.send(JSON.stringify({
+                type: "ice",
+                call_id: currentCallId,
+                candidate: evt.candidate
+              }));
+            }
+          };
+
+          pc.ontrack = (evt) => {
+            log("[Phone B] Remote audio track received! Starting audio forwarding to SatyaCheck backend (port 8767)...");
+            connectAudioIngest(currentCallId);
+          };
+
+          await pc.setRemoteDescription(new RTCSessionDescription({ type: "offer", sdp: msg.sdp }));
+          const answer = await pc.createAnswer();
+          await pc.setLocalDescription(answer);
+
+          log("[Phone B] Sending 'accept' with SDP answer to signalling...");
+          sigWs.send(JSON.stringify({
+            type: "accept",
+            call_id: currentCallId,
+            sdp: answer.sdp
+          }));
+
+          setStatus("In Call (Forwarding Audio)", "active");
+        } else if (msg.type === "ice") {
+          if (pc && msg.candidate) {
+            log("[Phone B] Received remote ICE candidate from Phone A.");
+            await pc.addIceCandidate(new RTCIceCandidate(msg.candidate));
+          }
+        } else if (msg.type === "call_ended") {
+          log("[Phone B] Call ended signal received.");
+          hangup();
+        } else if (msg.type === "error") {
+          log(`[Phone B] Signalling error: ${msg.reason}`);
+        }
+      };
+
+      sigWs.onclose = () => {
+        log("[Phone B] Signalling WebSocket closed.");
+      };
+    }
+
+    function connectAudioIngest(callId) {
+      const ingestUrl = document.getElementById("ingestUrl").value;
+      log(`[Phone B] Connecting to Audio Ingest WS at ${ingestUrl}...`);
+      ingestWs = new WebSocket(ingestUrl);
+
+      ingestWs.onopen = () => {
+        log("[Phone B] Audio Ingest WS connected. Sending JSON handshake...");
+        ingestWs.send(JSON.stringify({
+          call_id: callId,
+          codec: "opus",
+          sample_rate: 48000,
+          channels: 1
+        }));
+        log("[Phone B] Handshake sent. Streaming audio chunks to backend...");
+      };
+
+      ingestWs.onerror = (err) => {
+        log("[Phone B] Audio Ingest WS error: " + err);
+      };
+    }
+
+    function hangup() {
+      if (sigWs && sigWs.readyState === WebSocket.OPEN && currentCallId) {
+        log("Sending 'hangup' message to signalling...");
+        sigWs.send(JSON.stringify({ type: "hangup", call_id: currentCallId }));
+      }
+      if (pc) {
+        pc.close();
+        pc = null;
+      }
+      if (ingestWs) {
+        ingestWs.close();
+        ingestWs = null;
+      }
+      if (localStream) {
+        localStream.getTracks().forEach(t => t.stop());
+        localStream = null;
+      }
+      if (sigWs) {
+        sigWs.close();
+        sigWs = null;
+      }
+      log("Call terminated.");
+      setStatus("Disconnected");
+      document.getElementById("actionBtn").disabled = false;
+      document.getElementById("hangupBtn").disabled = true;
+      onRoleChange();
+    }
+  </script>
+</body>
+</html>
