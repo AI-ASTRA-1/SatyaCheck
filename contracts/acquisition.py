@@ -45,6 +45,10 @@ class AudioChunk(BaseModel):
     MUST NOT be imported below stage 02. The pipeline never sees this type. The
     transport, codec and sample-rate fields are documented per-stream properties
     of the acquisition layer, not decision inputs.
+
+    is_final marks a short trailing partial frame emitted once at stream close
+    (not padded to frame_ms); stage 02 must propagate it, unpadded, to
+    CanonicalAudioChunk.is_final rather than dropping or padding it.
     """
 
     stream_id: str
@@ -59,6 +63,7 @@ class AudioChunk(BaseModel):
     capture_timestamp: datetime
     received_at: datetime
     rtp_ts: int | None = None
+    is_final: bool = False
     metadata: dict[str, str] = Field(default_factory=dict)
 
 

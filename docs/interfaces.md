@@ -65,6 +65,35 @@ warning. A model failure degrades to "no warning", never to a dropped or altered
 call; detection runs out-of-band on a copy so the audio never passes through the
 models on its way to the listener.
 
+### 2.1 WebSocket routes and the WebRTC ingest join point
+
+Two concrete routes exist on the backend (`backend/app/main.py`):
+
+- `/ws/audio/{stream_id}/{call_id}` -- inbound. `ExotelWebSocketAdapter` here already
+  auto-detects transport per message: JSON text frames follow Exotel's
+  connected/start/media/stop protocol (base64 8kHz PCM, resampled to 16kHz); binary
+  frames are treated as raw, already-16kHz-mono-s16le PCM of any size, buffered and
+  sliced into exact 640-byte canonical frames (remainder carried across messages, a
+  true short tail marked `is_final` at close). **This binary path is the WebRTC
+  ingest join point** -- a custom WebRTC adapter does not get its own route. It
+  connects here directly and sends raw PCM as binary WebSocket messages, no JSON
+  handshake, no separate port. It is responsible for Opus decode and 48kHz -> 16kHz
+  resampling itself before sending; `IngestionConsumer.on_chunk` (stage 02) strictly
+  requires `codec=pcm_s16le, sample_rate=16000, channels=1` and rejects anything else
+  by design (`UnsupportedAudioFormatError`) -- this check is not to be loosened; fix
+  the sender instead.
+- `/ws/risk/{stream_id}` -- outbound. Broadcasts `AppMessage` JSON
+  (`SessionStart` / `RiskUpdate` / `CallEnded`) to every listener registered on that
+  `stream_id`.
+
+`stream_id`/`call_id` contract: both are caller-supplied, not server-generated.
+Whoever originates the call (the app) picks one id (e.g. a UUID) before dialing and
+uses the same value as: the WebRTC signaling call id, both path segments of
+`/ws/audio/{stream_id}/{call_id}` (`stream_id` and `call_id` may be the same value
+for now), and the `{stream_id}` in `/ws/risk/{stream_id}`. A server-side adapter that
+generates its own id (as an earlier WebRTC prototype did) breaks this -- the app has
+no way to learn a server-generated id today.
+
 ## 3. Message schemas
 
 ### 3.1 Acquisition boundary (`contracts/acquisition.py`)
@@ -87,6 +116,7 @@ AudioChunk: one frame as the transport delivered it, 20 ms nominal.
 | capture_timestamp | datetime | call-side clock |
 | received_at | datetime | adapter receive time, feeds latency budget |
 | rtp_ts | int or None | transport-specific, never read below 02 |
+| is_final | bool | default False. Marks a short trailing partial frame emitted once at stream close, not padded to frame_ms. Stage 02 must propagate it unpadded to CanonicalAudioChunk.is_final rather than dropping or padding it |
 | metadata | dict[str, str] | transport extras, never read below 02 |
 
 StreamOpen: call start, one per stream, before the first chunk. Carries
@@ -96,7 +126,10 @@ only, never in the app contract), `started_at`, the codec properties, and an
 
 StreamClose: call end, one per stream, after the last chunk. `reason` is completed,
 dropped, timeout or error. Carries `frames_received`, `bytes_received`,
-`dropped_frames` so gaps are recorded, not hidden.
+`dropped_frames` so gaps are recorded, not hidden. `dropped_frames` is
+incremented by the adapter whenever one media event's audio could not be
+recovered (missing/empty payload, undecodable base64) and that event is
+skipped rather than turned into an AudioChunk.
 
 `AudioStreamAdapter` (Protocol): what the acquisition adapters implement.
 `AudioStreamConsumer` (Protocol): what stage 02 implements. This is the exact seam
