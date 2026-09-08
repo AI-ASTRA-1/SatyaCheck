@@ -41,7 +41,14 @@ DEFAULT_DEGRADED_WINDOW_MS = 3000
 #: it, and what a score triggers is per deployment.
 DEFAULT_EVIDENCE_THRESHOLD = 0.5
 
-# All three numbers above are provisional. They are configuration, not measured
+#: Below this confidence the window is out of the checkpoint's training domain and
+#: the score should not be read as a judgement about synthesis. Chosen from measured
+#: separation, not by hand: held-out ASVspoof averages 0.498 while every group of
+#: IFD, our own and replayed audio sits at or below 0.300 (`ml/README.md`). It is
+#: still a configuration constant and the risk engine owns what it triggers.
+DEFAULT_LOW_CONFIDENCE = 0.3
+
+# The four numbers above are provisional. They are configuration, not measured
 # results, and none of them has been calibrated yet. Calibration on unseen data
 # revisits them; until then 0.5 on an uncalibrated score means very little.
 
@@ -58,11 +65,13 @@ class MachineFingerprintCheck:
         min_window_ms: int = DEFAULT_MIN_WINDOW_MS,
         degraded_window_ms: int = DEFAULT_DEGRADED_WINDOW_MS,
         evidence_threshold: float = DEFAULT_EVIDENCE_THRESHOLD,
+        low_confidence: float = DEFAULT_LOW_CONFIDENCE,
     ) -> None:
         self._scorer = scorer
         self._min_window_ms = min_window_ms
         self._degraded_window_ms = degraded_window_ms
         self._evidence_threshold = evidence_threshold
+        self._low_confidence = low_confidence
 
     def run(self, batch: CanonicalAudioBatch, context: CallContext) -> CheckResult:
         started = time.perf_counter()
@@ -86,8 +95,20 @@ class MachineFingerprintCheck:
         if self._scorer is None:
             return self._failed(batch, "no scorer configured", started)
 
+        # A scorer that can report domain distance does so in one forward pass.
+        # One that cannot keeps working unchanged, and confidence stays None.
+        confidence: float | None = None
         try:
-            probability = float(self._scorer.score(batch.pcm_s16le, CANONICAL_SAMPLE_RATE))
+            with_confidence = getattr(self._scorer, "score_with_confidence", None)
+            if with_confidence is None:
+                probability = float(
+                    self._scorer.score(batch.pcm_s16le, CANONICAL_SAMPLE_RATE)
+                )
+            else:
+                raw, raw_confidence = with_confidence(
+                    batch.pcm_s16le, CANONICAL_SAMPLE_RATE
+                )
+                probability, confidence = float(raw), float(raw_confidence)
         except Exception as exc:  # noqa: BLE001 - deliberate: a model failure is never a verdict
             return self._failed(batch, f"scorer raised {type(exc).__name__}", started)
 
@@ -99,11 +120,27 @@ class MachineFingerprintCheck:
             if probability >= self._evidence_threshold
             else ReasonCode.FINGERPRINT_GENUINE
         )
-        evidence = [
-            self._evidence(batch, reason, f"synthetic_probability {probability:.3f}", started)
-        ]
+        detail = f"synthetic_probability {probability:.3f}"
+        if confidence is not None:
+            detail += f"; confidence {confidence:.3f}"
+        evidence = [self._evidence(batch, reason, detail, started)]
 
         status = CheckStatus.OK
+        if confidence is not None and confidence < self._low_confidence:
+            # Structured, not a string the risk engine has to parse. On audio unlike
+            # the training set this model's score converges toward 1.0 whether the
+            # speech is genuine or not, so a high probability here means "unfamiliar"
+            # and not "synthetic". DEGRADED is the honest status for that.
+            status = CheckStatus.DEGRADED
+            evidence.append(
+                self._evidence(
+                    batch,
+                    ReasonCode.DEGRADED_CHECK,
+                    f"out of training domain, confidence {confidence:.3f} below "
+                    f"{self._low_confidence}",
+                    started,
+                )
+            )
         if window_ms < self._degraded_window_ms:
             status = CheckStatus.DEGRADED
             evidence.append(

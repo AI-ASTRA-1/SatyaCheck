@@ -1015,6 +1015,45 @@ which runs XLS-R twice: 1030.8 ms on CPU, 59.9 ms on GPU. `score_and_embed` retu
 both from one forward and is bit-identical to calling them separately. That is where
 the 522.9 ms above comes from rather than 1030.8 ms.
 
+### The integration seam for R2, 2026-09-08
+
+```python
+from ml.checks.machine_fingerprint import build_default_check
+
+check = build_default_check()   # device resolved, weights loaded, already warmed
+```
+
+One call. `ml/runner/` never imports a scorer, a path or a device string;
+`docs/interfaces.md` already permits `ml/runner/` to import `ml/checks/*`, so no
+contract moves.
+
+**It raises on a CPU-only machine, deliberately.** `xlsr-aasist` is 522.9 ms per
+window against a 180 ms deadline, so every window would miss it and the buffer would
+back up. Failing at startup with the numbers in the message beats discovering it per
+window. `allow_cpu_fallback=True` gives AASIST-L at 159.8 ms, which fits and is
+**inverted** on the IFD samples, so it is a latency fallback and not an accuracy one.
+
+**Confidence needs no contract change.** `MachineFingerprintSignal` is untouched.
+A scorer that implements the optional `score_with_confidence` gets two things:
+
+- `confidence 0.412` appended to the `EvidenceItem.detail`, for logs and forensics
+- `CheckStatus.DEGRADED` plus a **`ReasonCode.DEGRADED_CHECK`** item when confidence
+  is below `DEFAULT_LOW_CONFIDENCE` (0.3)
+
+The reason code is the part that matters. The risk engine can branch on an enum that
+already exists rather than running a regex over a free-text field, and nothing has to
+change in `contracts/checks.py`. A scorer without `score_with_confidence` behaves
+exactly as before.
+
+**DEGRADED is a caveat, not a suppression.** The signal still carries
+`synthetic_probability`; the risk engine decides what a low-confidence score is worth.
+
+**What the threshold costs, stated because it is not free.** Percentile calibration
+makes confidence roughly uniform on in-domain audio (mean 0.508), so a cut at 0.3
+marks about **28% of in-domain windows DEGRADED** as well as ~100% of out-of-domain
+ones. That is a property of the calibration, not a defect. It is configuration and
+the risk engine owns what it triggers.
+
 ### Moving the model to another machine
 
 `ml/tools/handoff.py`. **1.2 GB in five files, not the 6.45 GB the model directory
