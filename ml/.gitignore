@@ -1,0 +1,37 @@
+# No audio, weights or datasets in the repo. AGENTS.md: never commit real audio,
+# voiceprints, keys or held-out evaluation data.
+#
+# The root .gitignore covers *.wav, *.mp3, *.flac, *.opus and *.amr but not the
+# video-container extensions that phone recorders actually produce, so recordings
+# arriving as .mp4 or .mpeg were showing up as trackable. This closes that on this
+# machine. The root file needs the same patterns for everyone else; raised with R2
+# in QUESTIONS.md.
+
+# audio and video containers
+*.mp4
+*.mpeg
+*.mpg
+*.m4a
+*.aac
+*.ogg
+*.oga
+*.webm
+*.3gp
+*.wma
+*.wav
+*.mp3
+*.flac
+*.opus
+*.amr
+
+# recordings, datasets and weights live outside the repo
+recordings/
+data/
+datasets/
+models/
+checkpoints/
+*.pth
+*.ckpt
+*.bin
+*.onnx
+*.safetensors
