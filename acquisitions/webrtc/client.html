@@ -177,9 +177,12 @@
     let meterInterval = null;
     let audioCtx = null;
 
-    function setupMicMeter(stream) {
+    async function setupMicMeter(stream) {
       try {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === "suspended") {
+          await audioCtx.resume();
+        }
         const src = audioCtx.createMediaStreamSource(stream);
         const analyser = audioCtx.createAnalyser();
         analyser.fftSize = 256;
@@ -191,7 +194,7 @@
           analyser.getByteFrequencyData(data);
           let sum = 0;
           for (let i = 0; i < data.length; i++) sum += data[i];
-          const avg = Math.min(100, Math.round((sum / data.length) * 2));
+          const avg = Math.min(100, Math.round((sum / data.length) * 2.5));
           if (meter) meter.value = avg;
           if (val) val.innerText = avg + "%";
         }, 100);
