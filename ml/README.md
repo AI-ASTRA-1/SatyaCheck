@@ -1408,11 +1408,29 @@ Verified after each step that `torch.__version__` was still `2.11.0+cu128` and
 `torch.cuda.is_available()` still True. If speechbrain is ever reinstalled normally,
 check the torch build before trusting any GPU number.
 
-torch and torchaudio came from `--index-url https://download.pytorch.org/whl/cu128`,
-since the default PyPI wheel on Windows is CPU-only. That index is not recorded in
-`pyproject.toml`, so a fresh `uv sync --extra ml` on another machine would install
-the CPU build instead. Recording it is a shared-config change and `pyproject.toml`
-is not R1's file; raised with R2 in `QUESTIONS.md`.
+torch and torchaudio come from `https://download.pytorch.org/whl/cu128`, since the
+default PyPI wheel on Windows is CPU-only. **That index is now recorded in
+`pyproject.toml`** (`[[tool.uv.index]]` plus `[tool.uv.sources]`, approved and added
+during the backend merge on 2026-09-08), and both packages are pinned to `==2.11.0`
+so the build matches what `FROZEN.md` records. A fresh resolve now produces
+`2.11.0+cu128` rather than the CPU wheel.
+
+The two commands behave differently, and the difference is what bit us:
+
+- **`uv run` is inexact.** It does not remove extraneous packages (`--exact` is
+  opt-in), but it does re-resolve the packages it is asked for. That is how
+  `uv run --extra ml` replaced 2.11.0+cu128 with 2.14.0+cpu before the pin existed:
+  not by pruning, but by resolving `torch` afresh from PyPI. With the pin it now
+  holds. Verified 2026-09-08: the same command reports 2.11.0+cu128, cuda True.
+- **`uv sync` is exact and prunes.** `speechbrain`, `hyperpyyaml`, `sentencepiece`,
+  `joblib` and `scipy` are installed and imported but not declared in
+  `pyproject.toml`, having been added with `--no-deps` to stop speechbrain dragging
+  in the CPU torch wheel. Measured with `--dry-run`: `uv sync --extra runtime` would
+  uninstall 66 packages including torch and speechbrain, and even
+  `uv sync --extra ml --extra runtime` would uninstall 38, speechbrain among them
+  (torch survives that one, so the pin is doing its job). **Do not run a bare
+  `uv sync`** until those five are declared, or pass `--inexact`. Declaring them is a
+  shared-config change; raised in `QUESTIONS.md`.
 
 Three consequences worth writing down:
 

@@ -9,8 +9,11 @@ dependencies = [
 
 [project.optional-dependencies]
 ml = [
-    "torch",
-    "torchaudio",
+    # Pinned to the build FROZEN.md records. The diagnosis rests on every run
+    # having used one configuration, and ml/tests/test_frozen_config.py asserts
+    # this version against that file, so an unpinned bump breaks the baseline.
+    "torch==2.11.0",
+    "torchaudio==2.11.0",
     "transformers",
     "onnxruntime",
 ]
@@ -35,3 +38,29 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["contracts", "acquisitions", "backend", "ml"]
 # app/ is excluded: it is Node/Expo, managed by npm, never part of the Python project.
+
+# torch and torchaudio come from the CUDA index, never PyPI. The default PyPI
+# wheel on Windows is CPU-only, so without this a `uv sync --extra ml` silently
+# installs a build that cannot train and reports cuda_available False on a
+# machine that has a GPU. Raised in QUESTIONS.md by R1 on 2026-09-07.
+#
+# `explicit = true` keeps every other package on PyPI: only the two below,
+# which name this index in [tool.uv.sources], are ever resolved from it.
+#
+# NOTE: this machine needs `--system-certs` on uv commands that download
+# (something intercepts TLS and uv's bundled certificate store rejects the
+# issuer). Older uv spells the same flag `--native-tls`.
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+# The marker keeps macOS on PyPI, where no cu128 wheel exists and the CPU build
+# is the only correct one.
+[tool.uv.sources]
+torch = [
+    { index = "pytorch-cu128", marker = "sys_platform == 'win32' or sys_platform == 'linux'" },
+]
+torchaudio = [
+    { index = "pytorch-cu128", marker = "sys_platform == 'win32' or sys_platform == 'linux'" },
+]

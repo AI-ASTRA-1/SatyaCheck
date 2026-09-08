@@ -41,6 +41,30 @@ installs a build that cannot train. `--system-certs` is also required here becau
 something intercepts TLS and uv's bundled certificate store rejects the issuer.
 **What I need:** The cu128 index recorded in `pyproject.toml` so the ML environment is
 reproducible off this machine, and a note that `--system-certs` is required here.
+**RESOLVED 2026-09-08**, approved during the backend merge. `pyproject.toml` now
+carries `[[tool.uv.index]]` for cu128 with `explicit = true`, `[tool.uv.sources]`
+routing torch and torchaudio to it on win32 and linux only, and `==2.11.0` pins on
+both so the resolved build matches `FROZEN.md`. `uv lock` confirms
+`v2.11.0+cu128`; the `--system-certs` requirement is recorded in a comment there.
+
+## R1 (ML) - 2026-09-08
+
+**Blocked on:** `uv sync` would delete part of the working ML environment, and
+`pyproject.toml` changes beyond the index pin are R2's call.
+**What I tried:** During the backend merge, `uv run --extra ml` silently replaced
+torch 2.11.0+cu128 with 2.14.0+cpu, which made `cuda_available()` False on a machine
+with an RTX 4070 and sent `build_default_check()` down the CPU path.
+`ml/tests/test_frozen_config.py` caught it, which is what that guard is for. The
+cause was the missing index pin, now resolved above: `uv run` is inexact and does
+not prune, but it re-resolves the packages it is asked for, so `torch` came fresh
+from PyPI as a CPU wheel. Re-verified after the pin: the same command reports
+2.11.0+cu128 with cuda True.
+**What I need:** A decision on declaring `speechbrain`, `hyperpyyaml`, `sentencepiece`,
+`joblib` and `scipy` in the `ml` extra. They are installed and imported but undeclared,
+so any `uv sync` prunes them. They were installed with `--no-deps` specifically to stop
+speechbrain resolving the CPU torch wheel, and the new `[tool.uv.sources]` pin removes
+that reason, so declaring them normally should now be safe. Until then, nobody should
+run a bare `uv sync`, and the merge testing used `.venv\Scripts\python.exe` directly.
 
 ## R1 (ML) - 2026-09-08 - AFFECTS WHAT THE DEMO AND DECK MAY CLAIM
 
