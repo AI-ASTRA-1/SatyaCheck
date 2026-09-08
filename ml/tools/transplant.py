@@ -28,6 +28,9 @@ import json
 import sys
 from pathlib import Path
 
+import numpy as np
+
+from ml.augment.g711 import mulaw_round_trip
 from ml.checks.machine_fingerprint import MachineFingerprintCheck
 from ml.eval import runlog
 from ml.eval.canonical import SAMPLE_RATE, load
@@ -50,6 +53,19 @@ CLASSES: dict[str, str] = {"bonafide": "genuine", "deepfake": "spoof"}
 #: IFD `pc` by default: it has the cleanest separation this checkpoint shows on
 #: independent audio (0.029 against 0.847), so a collapse is unambiguous.
 DEFAULT_SUBJECTS = ("pc",)
+
+#: All five IFD subjects, via --all-subjects. Strongly preferred over the default,
+#: for two reasons that both come out of the diagnosis so far. The `pc` clips are
+#: 5.1 s, which is one analysis window, and a single window's score moves nearly the
+#: full 0 to 1 range with position; five paired subjects average that out. And
+#: `overlap` is degenerate at one clip per class, so it only carries information
+#: once there are five. Ten clips instead of two is about a minute more playback.
+ALL_SUBJECTS = ("alia", "cb", "madhavan", "pc", "sadhguru")
+
+#: Channel recorded for a path C derived in software rather than captured. Named so
+#: it can never be read as a real call: no row from a simulated leg carries the
+#: `phone_exotel` channel that a real capture would.
+SIMULATED_EXOTEL_CHANNEL = "phone_g711_sim"
 
 #: Controls that must be identical across all four captures. A capture without
 #: these recorded is confounded and cannot be read, so the file is required as soon
@@ -85,6 +101,28 @@ def conditions_note(conditions: dict[str, str]) -> str:
     return "; ".join(f"{key}={value}" for key, value in conditions.items())
 
 
+def simulated_exotel(phone_audio: np.ndarray) -> np.ndarray:
+    """The live telephony leg, applied in software to a path B recording.
+
+    **This is not a call.** It models one property of the Exotel path, the G.711
+    mu-law codec at 64 kb/s, which `ml/README.md` records as what the live stream
+    carries and as scoring 0.000 on known-bonafide audio, identical to studio.
+
+    It exists because `acquisitions/exotel/` is a stub and `AGENTS.md` still lists
+    "can the provider stream during the call" as open and blocking. The only Exotel
+    audio obtainable today is a recording export at 8 kb/s, which the same document
+    records as turning 8 of 8 genuine clips into 0.999 alerts. A path C captured
+    from an export would measure that codec cliff, which is already characterised,
+    rather than the acquisition channel.
+
+    What it does not model: network jitter, packet loss, the bridge's own gain
+    handling, and whatever resampling sits inside the provider. Every row it
+    produces carries `channel: phone_g711_sim` and says SIMULATED in its notes, so
+    it can never be read as a real call.
+    """
+    return mulaw_round_trip(phone_audio)
+
+
 def score_cells(
     check: MachineFingerprintCheck,
     subjects: tuple[str, ...],
@@ -93,8 +131,14 @@ def score_cells(
     cache: Path,
     commit: str,
     conditions: dict[str, str] | None,
+    simulate_exotel: bool = False,
 ) -> tuple[list[runlog.Row], dict[tuple[str, str, str], float], list[str]]:
-    """Score every cell that exists. Returns rows, a lookup, and what was missing."""
+    """Score every cell that exists. Returns rows, a lookup, and what was missing.
+
+    With `simulate_exotel`, path C is derived from the path B recording in software
+    rather than captured. See `simulated_exotel` for what that does and does not
+    model.
+    """
     rows: list[runlog.Row] = []
     scores: dict[tuple[str, str, str], float] = {}
     missing: list[str] = []
@@ -105,13 +149,31 @@ def score_cells(
                 name = f"{subject}_{klass}{suffix}"
                 directory = source_dir if path_id == "A" else capture_dir
                 source = directory / f"{name}.wav"
-                if not source.exists():
+
+                simulated = False
+                if path_id == "C" and simulate_exotel and not source.exists():
+                    phone = capture_dir / f"{subject}_{klass}_phone.wav"
+                    if not phone.exists():
+                        missing.append(
+                            f"C/{subject}/{klass} cannot be simulated, "
+                            f"path B missing at {phone}"
+                        )
+                        print(f"  {name:<26} MISSING (no path B)", file=sys.stderr)
+                        continue
+                    audio = simulated_exotel(load(phone, cache))
+                    channel = SIMULATED_EXOTEL_CHANNEL
+                    simulated = True
+                elif not source.exists():
                     missing.append(f"{path_id}/{subject}/{klass} at {source}")
                     print(f"  {name:<26} MISSING", file=sys.stderr)
                     continue
+                else:
+                    audio = load(source, cache)
 
-                outcome = mean_score(check, load(source, cache))
+                outcome = mean_score(check, audio)
                 note = f"path {path_id}, {subject} {klass}"
+                if simulated:
+                    note += "; SIMULATED G.711 mu-law from path B, not a real call"
                 if path_id != "A":
                     note += f"; {conditions_note(conditions or {})}"
                 rows.append(
@@ -214,7 +276,8 @@ def report(
             print(f"  {line}")
 
     if missing:
-        print(f"\n{len(missing)} of 6 cells are missing:")
+        total = len(subjects) * len(PATHS) * len(CLASSES)
+        print(f"\n{len(missing)} of {total} cells are missing:")
         for item in missing:
             print(f"  {item}")
         print(
@@ -235,6 +298,23 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help=f"IFD subject to transplant (default: {' '.join(DEFAULT_SUBJECTS)})",
     )
+    parser.add_argument(
+        "--all-subjects",
+        action="store_true",
+        help=(
+            "all five IFD subjects. Strongly preferred: it averages the window "
+            "position noise a 5 s clip carries, and it is what makes overlap mean "
+            "anything"
+        ),
+    )
+    parser.add_argument(
+        "--simulate-exotel",
+        action="store_true",
+        help=(
+            "derive path C from the path B recording through G.711 mu-law instead "
+            "of capturing it. Models the live stream codec only, never a real call"
+        ),
+    )
     parser.add_argument("--source-dir", type=Path, default=downloads)
     parser.add_argument(
         "--capture-dir",
@@ -247,7 +327,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--device", default=None)
     args = parser.parse_args(argv)
 
-    subjects = tuple(args.subjects or DEFAULT_SUBJECTS)
+    if args.all_subjects and args.subjects:
+        raise SystemExit("pass --all-subjects or --subject, not both")
+    subjects = tuple(
+        ALL_SUBJECTS if args.all_subjects else (args.subjects or DEFAULT_SUBJECTS)
+    )
     cache = args.cache_dir or args.out.parent / "canonical"
     fields = collect()
     commit = fields["frozen_commit"]
@@ -265,17 +349,35 @@ def main(argv: list[str] | None = None) -> int:
         print(f"controls {conditions_note(conditions)}")
     print()
 
+    if args.simulate_exotel:
+        print(
+            "path C   SIMULATED from path B through G.711 mu-law. "
+            "Models the live stream codec, not a call."
+        )
+
     check = build_check("xlsr-aasist", args.device)
     rows, scores, missing = score_cells(
-        check, subjects, args.source_dir, args.capture_dir, cache, commit, conditions
+        check,
+        subjects,
+        args.source_dir,
+        args.capture_dir,
+        cache,
+        commit,
+        conditions,
+        simulate_exotel=args.simulate_exotel,
     )
 
     runlog.write(rows, args.out)
     print(f"\nwrote {len(rows)} rows to {args.out}")
     report(scores, subjects, missing)
+    if len(subjects) == 1:
+        print(
+            "\nOne subject. overlap cannot carry information at one clip "
+            "per class; --all-subjects is what fixes that."
+        )
     print(
-        "\nEvidence, not a verdict. One subject per column unless --subject is "
-        "repeated, and overlap needs more than one clip per class to mean anything."
+        "\nEvidence, not a verdict. Read the absolute path B scores as well as the "
+        "deltas: delta_spoof cannot exceed 1.0 minus the path A spoof score."
     )
     return 1 if missing else 0
 

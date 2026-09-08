@@ -133,9 +133,13 @@ certutil -hashfile %LOCALAPPDATA%\satyacheck\models\Best_LA_model_for_DF.pth SHA
 git rev-parse HEAD
 ```
 
-Every CSV under `data/results/` carries `checkpoint` and `frozen_commit` columns. A
-row whose `frozen_commit` is not `f1e83a8` was produced under a different config and
-must not be compared with one that was.
+Every CSV under `data/results/` carries `checkpoint` and `frozen_commit` columns.
+A row's `frozen_commit` is the commit the run was made at, which is provenance, not
+a claim. The claim that the run used *this* config is enforced separately, by
+`ml/tests/test_frozen_config.py`: it fails at any commit where the code has drifted
+from the fields above. So a row is comparable with another row when both their
+commits pass that test, and the checkpoint hash is unchanged.
 
-`frozen_commit` is the commit the config was read at, which is the parent of the
-commit that adds this file. There is no way for a file to name its own commit.
+The `frozen_commit` field in the block above is different: it is the commit the
+config was read at, `f1e83a8`, the parent of the commit that adds this file. A file
+cannot name its own commit.

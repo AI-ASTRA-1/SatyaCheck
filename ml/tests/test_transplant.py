@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 from ml.eval.transplant import describe, gap, overlap_is_meaningful, separation
@@ -223,3 +224,64 @@ class TestWiring:
         genuine_b, spoof_b = transplant.class_scores(cells, "B")
         assert genuine_b == [0.93]
         assert spoof_b == []
+
+
+class TestSimulatedExotel:
+    """Path C derived in software, because acquisitions/exotel is a stub.
+
+    The risk this guards is not numerical, it is that a simulated row is later read
+    as a real call. So the tests are about labelling as much as about signal.
+    """
+
+    @staticmethod
+    def speech(seconds: float = 5.0, seed: int = 0) -> np.ndarray:
+        rng = np.random.default_rng(seed)
+        return rng.normal(0.0, 0.15, int(seconds * 16000)).astype(np.float32)
+
+    def test_it_returns_audio_of_the_same_length(self) -> None:
+        source = self.speech()
+        assert transplant.simulated_exotel(source).shape == source.shape
+
+    def test_it_actually_changes_the_signal(self) -> None:
+        source = self.speech()
+        out = transplant.simulated_exotel(source)
+        assert not np.array_equal(out, source), "a no-op would model nothing"
+
+    def test_the_quantisation_error_is_g711_sized(self) -> None:
+        source = self.speech()
+        error = float(np.sqrt(((transplant.simulated_exotel(source) - source) ** 2).mean()))
+        # ml/README.md records mu-law round-trip error at 0.0197 for this
+        # implementation. Well outside that would mean something else ran.
+        assert 0.001 < error < 0.1
+
+    def test_it_is_deterministic(self) -> None:
+        source = self.speech()
+        assert np.array_equal(
+            transplant.simulated_exotel(source), transplant.simulated_exotel(source)
+        )
+
+    def test_the_channel_label_cannot_be_confused_with_a_real_call(self) -> None:
+        # A real capture records channel "phone_exotel". A simulation must never
+        # borrow that value, or a CSV row stops carrying the distinction.
+        assert transplant.SIMULATED_EXOTEL_CHANNEL == "phone_g711_sim"
+        real_channels = {channel for _, channel in transplant.PATHS.values()}
+        assert transplant.SIMULATED_EXOTEL_CHANNEL not in real_channels
+
+
+class TestSubjectSelection:
+    def test_all_subjects_covers_every_ifd_name(self) -> None:
+        from ml.tools.baseline import IFD_SUBJECTS
+
+        assert transplant.ALL_SUBJECTS == IFD_SUBJECTS
+
+    def test_the_default_is_a_subset_of_all(self) -> None:
+        assert set(transplant.DEFAULT_SUBJECTS) <= set(transplant.ALL_SUBJECTS)
+
+    def test_five_subjects_make_overlap_meaningful(self) -> None:
+        from ml.eval.transplant import overlap_is_meaningful
+
+        # The reason --all-subjects exists. One subject gives one clip per class.
+        one = [0.5] * len(transplant.DEFAULT_SUBJECTS)
+        five = [0.5] * len(transplant.ALL_SUBJECTS)
+        assert not overlap_is_meaningful(one, one)
+        assert overlap_is_meaningful(five, five)

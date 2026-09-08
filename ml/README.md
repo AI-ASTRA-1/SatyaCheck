@@ -411,13 +411,28 @@ the answer" below, because fixing it turned up something larger.
 `data/results/transplant.csv`. The tool is built and tested; the experiment is not
 finished, because four of the six cells need a person, a speaker and a phone.
 
-| | A: original file | B: speaker to phone | C: through Exotel |
+| | A: original file | B: speaker to phone | C: Exotel |
 |---|---|---|---|
-| IFD `pc` bonafide | **0.0290** | not recorded | not recorded |
-| IFD `pc` deepfake | **0.8487** | not recorded | not recorded |
+| bonafide, 5 subjects | **0.0046 to 0.9993** | not recorded | derived in software |
+| deepfake, 5 subjects | **0.1279 to 0.9995** | not recorded | derived in software |
 
-Path A separation: genuine 0.0290, spoof 0.8487, **gap +0.8180**. That is the
-separation the transplant is designed to try to collapse.
+**Path A separation across all five subjects: overlap 0.8714, gap -0.8714.** The
+classes almost entirely overlap before any transplant.
+
+`pc` alone gives genuine 0.0290 against spoof 0.8487, a gap of +0.8180, and it is
+**the one subject of five where this model separates at all**. Choosing it for the
+transplant because it has the cleanest separation is selecting on the outcome, so the
+transplant runs on all five (`--all-subjects`). The paired per-subject delta is still
+the right statistic, since each subject is its own control, but "separation before"
+for the set is 0.87 overlap and not `pc`'s gap.
+
+**Path C is derived in software, not captured.** `acquisitions/exotel/` is a
+docstring and the streaming question in `AGENTS.md` is still open, so the only Exotel
+audio obtainable is a recording export at 8 kb/s, which this file already records as
+turning 8 of 8 genuine clips into 0.999 alerts. `--simulate-exotel` applies G.711
+mu-law at 64 kb/s to the path B recording instead, which is what this file records
+the live stream as carrying. Those rows carry `channel: phone_g711_sim` and say
+SIMULATED in their notes. No gate rule reads path C.
 
 All four deltas are `not measured`, and the tool reports them that way rather than
 as zero. A zero would read as "the channel changed nothing", which is the opposite of
